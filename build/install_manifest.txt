@@ -1,0 +1,2 @@
+/usr/local/bin/sdraw
+/usr/share/applications/sdraw.desktop

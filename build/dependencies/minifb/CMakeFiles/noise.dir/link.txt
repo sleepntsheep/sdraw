@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/noise.dir/tests/noise.c.o -o noise  libminifb.a -lX11 -lGL 

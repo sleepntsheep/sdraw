@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/input_events.dir/tests/input_events.c.o -o input_events  libminifb.a -lX11 -lGL 

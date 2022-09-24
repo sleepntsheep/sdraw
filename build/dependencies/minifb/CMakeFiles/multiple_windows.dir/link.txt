@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/multiple_windows.dir/tests/multiple_windows.c.o -o multiple_windows  libminifb.a -lX11 -lGL 

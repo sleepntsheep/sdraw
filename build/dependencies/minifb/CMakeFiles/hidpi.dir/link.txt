@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/hidpi.dir/tests/hidpi.c.o -o hidpi  libminifb.a -lX11 -lGL 
