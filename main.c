@@ -126,6 +126,9 @@ void app_event(app_t *app) {
                 case SDLK_4:
                     app->color = colors[3];
                     break;
+                case SDLK_5:
+                    app->color = colors[4];
+                    break;
                 case SDLK_EQUALS:
                     app->brushsize++;
                     break;
