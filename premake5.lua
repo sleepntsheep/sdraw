@@ -36,6 +36,6 @@ optimize "On"
 filter "configurations:MinimalFont"
 
 filter {}
-buildoptions { "-std=c17", "-Wall", "-Wextra", "-pedantic" }
+buildoptions { "-std=c2x", "-Wall", "-Wextra", "-pedantic", "-ggdb" }
 links { "SDL2", "SDL2_ttf", "SDL2_image" }
 

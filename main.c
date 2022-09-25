@@ -1,4 +1,3 @@
-#include <SDL2/SDL_keycode.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -6,6 +5,8 @@
 #include <stddef.h>
 #define SHEEP_LOG_IMPLEMENTATION
 #include "log.h"
+#define SHEEP_DYNARRAY_IMPLEMENTATION
+#include "dynarray.h"
 #include "config.h"
 #include <SDL2/SDL.h>
 
@@ -31,6 +32,13 @@ typedef struct {
     int lx, ly;
 } app_t;
 
+typedef struct {
+} menu_t;
+
+typedef struct {
+    int x, y;
+} vec2i_t;
+
 void app_init(app_t *app, int w, int h) {
     app->w = w;
     app->h = h;
@@ -51,6 +59,32 @@ void app_init(app_t *app, int w, int h) {
 
 void app_clean(app_t *app) {
     free(app->fb);
+}
+
+void flood_fill(int x, int y, app_t *app) {
+    static const int dx[] = {-1, 1, 0, 0};
+    static const int dy[] = {0, 0, 1, -1};
+    uint32_t oldcolor = app->fb[y*app->w+x];
+    if (oldcolor == app->color) {
+        return;
+    }
+    vec2i_t *stack = arrnew(vec2i_t);
+    arrpush(stack, ((vec2i_t){x, y}));
+    while (arrlen(stack) > 0) {
+        vec2i_t v = arrpop(stack);
+        app->fb[v.y*app->w + v.x] = app->color;
+        for (int i = 0; i < 4; i++) {
+            vec2i_t nv = {v.x + dx[i], v.y + dy[i]};
+            if (nv.x >= app->w || nv.x < 0 || nv.y >= app->h || nv.y < 0) {
+                continue;
+            }
+            if (app->fb[nv.y*app->w + nv.x] != oldcolor) {
+                continue;
+            }
+            arrpush(stack, nv);
+        }
+    }
+    arrfree(stack);
 }
 
 void draw_line(int x1, int y1, int x2, int y2, app_t *app) {
@@ -93,12 +127,18 @@ void app_event(app_t *app) {
             app->running = false;
             break;
         case SDL_MOUSEBUTTONDOWN:
-            app->isdrag = true;
-            app->lx = e.button.x;
-            app->ly = e.button.y;
+            if (app->tool == BRUSH) {
+                app->isdrag = true;
+                app->lx = e.button.x;
+                app->ly = e.button.y;
+            }
             break;
         case SDL_MOUSEBUTTONUP:
             app->isdrag = false;
+            if (app->tool == BUCKET) {
+                flood_fill(e.button.x, e.button.y, app);
+                app->redraw = true;
+            }
             break;
         case SDL_MOUSEMOTION:
             if (app->isdrag) {
@@ -134,6 +174,12 @@ void app_event(app_t *app) {
                     break;
                 case SDLK_MINUS:
                     app->brushsize--;
+                    break;
+                case SDLK_n:
+                    app->tool = BUCKET;
+                    break;
+                case SDLK_b:
+                    app->tool = BRUSH;
                     break;
             }
             break;
