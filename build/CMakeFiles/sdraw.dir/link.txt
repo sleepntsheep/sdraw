@@ -1,1 +1,0 @@
-/usr/bin/cc CMakeFiles/sdraw.dir/main.c.o -o sdraw  -lSDL2 
