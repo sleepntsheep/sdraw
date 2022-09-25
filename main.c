@@ -13,6 +13,7 @@
 #include "tinyfiledialogs.h"
 #include <SDL2/SDL.h>
 
+#define NK_BUTTON_TRIGGER_ON_RELEASE
 #define NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_STANDARD_IO
 #define NK_INCLUDE_STANDARD_VARARGS
@@ -344,10 +345,8 @@ void app_draw_gui(app_t *app) {
             if (nk_option_label(gui.ctx, "Bucket", app->canvas.tool == BUCKET)) app->canvas.tool = BUCKET;
             nk_group_end(gui.ctx);
         }
-
-
-        nk_end(gui.ctx);
     }
+    nk_end(gui.ctx);
 
     if (gui.img.open_save_dialog) {
         if (nk_begin(gui.ctx, "Save", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
@@ -367,8 +366,8 @@ void app_draw_gui(app_t *app) {
                     gui.img.file_path = NULL;
                 }
             }
-            nk_end(gui.ctx);
         }
+        nk_end(gui.ctx);
     }
 
     if (gui.new.open_dialog) {
@@ -391,8 +390,8 @@ void app_draw_gui(app_t *app) {
                 app_clean(app);
                 return app_init(app, gui.new.w, gui.new.h);
             }
-            nk_end(gui.ctx);
         }
+        nk_end(gui.ctx);
     }
 
     nk_sdl_render(NK_ANTI_ALIASING_ON);
