@@ -25,7 +25,9 @@
 #include "nuklear.h"
 #include "nuklear_sdl_renderer.h"
 
-#define unused(a) ((void)(a))
+#define UNUSED(a) ((void)(a))
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
 
 const int GUI_HEIGHT = 100;
 const int MAX_BRUSHSIZE = 30;
@@ -98,11 +100,13 @@ uint32_t canvas_get_pixel(canvas_t *canvas, int x, int y) {
     return canvas->fb[y * canvas->w + x];
 }
 
+
 void app_init(app_t *app, int w, int h) {
+    /* w, h params are canvas size, app->w and app->h is different */
     memset(app, 0, sizeof(app_t));
-    app->w = w;
+    app->w = MAX(w, 500);
     app->h = h;
-    app->win = SDL_CreateWindow("sdraw", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h + GUI_HEIGHT, SDL_WINDOW_SHOWN);
+    app->win = SDL_CreateWindow("sdraw", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, app->w, h + GUI_HEIGHT, SDL_WINDOW_SHOWN);
     app->rend = SDL_CreateRenderer(app->win, -1, 0);
     app->tex = SDL_CreateTexture(app->rend, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
     app->running = true;
@@ -397,11 +401,12 @@ void app_draw_gui(app_t *app) {
 
 void app_draw(app_t *app) {
     app->redraw = false;
-    SDL_UpdateTexture(app->tex, NULL, app->canvas.fb, app->w * sizeof(*app->canvas.fb));
+    SDL_SetRenderDrawColor(app->rend, 0, 0, 0, 255);
     SDL_RenderClear(app->rend);
+    SDL_UpdateTexture(app->tex, NULL, app->canvas.fb, app->canvas.w * sizeof(*app->canvas.fb));
     const SDL_Rect dstrect = {
-        .w = app->w,
-        .h = app->h,
+        .w = app->canvas.w,
+        .h = app->canvas.h,
     };
     SDL_RenderCopy(app->rend, app->tex, NULL, &dstrect);
 }
