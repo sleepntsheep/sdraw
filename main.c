@@ -1,3 +1,15 @@
+/*  sdraw - simple paint program 
+ *
+ *  TODO
+ *   - rectangle tool
+ *   - select & mvoe tool
+ *   - lasso select tool
+ *   - undo & redo
+ *   - png export
+ *
+ *  sleepntsheep 2022
+ */
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
