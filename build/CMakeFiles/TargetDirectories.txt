@@ -1,0 +1,7 @@
+/home/sheep/Documents/code/sdraw/build/CMakeFiles/sdraw.dir
+/home/sheep/Documents/code/sdraw/build/CMakeFiles/edit_cache.dir
+/home/sheep/Documents/code/sdraw/build/CMakeFiles/rebuild_cache.dir
+/home/sheep/Documents/code/sdraw/build/CMakeFiles/list_install_components.dir
+/home/sheep/Documents/code/sdraw/build/CMakeFiles/install.dir
+/home/sheep/Documents/code/sdraw/build/CMakeFiles/install/local.dir
+/home/sheep/Documents/code/sdraw/build/CMakeFiles/install/strip.dir
