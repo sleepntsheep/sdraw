@@ -10,7 +10,22 @@
 #include "config.h"
 #include <SDL2/SDL.h>
 
+#define NK_INCLUDE_FIXED_TYPES
+#define NK_INCLUDE_STANDARD_IO
+#define NK_INCLUDE_STANDARD_VARARGS
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
+#define NK_INCLUDE_FONT_BAKING
+#define NK_INCLUDE_DEFAULT_FONT
+#define NK_IMPLEMENTATION
+#define NK_SDL_RENDERER_IMPLEMENTATION
+#include "nuklear.h"
+#include "nuklear_sdl_renderer.h"
+
 #define unused(a) ((void)(a))
+
+const int GUI_HEIGHT = 100;
+const int MAX_BRUSHSIZE = 30;
 
 enum Tool {
     BRUSH,
@@ -30,10 +45,8 @@ typedef struct {
     bool running;
     bool redraw;
     int lx, ly;
+    struct nk_context *gui;
 } app_t;
-
-typedef struct {
-} menu_t;
 
 typedef struct {
     int x, y;
@@ -47,7 +60,7 @@ void app_init(app_t *app, int w, int h) {
         panic("Failed to allocate memory for canvas, is canvas too big?");
     }
     memset(app->fb, 0xFF, w*h*sizeof(*app->fb));
-    app->win = SDL_CreateWindow("sdraw", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, SDL_WINDOW_SHOWN);
+    app->win = SDL_CreateWindow("sdraw", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h + GUI_HEIGHT, SDL_WINDOW_SHOWN);
     app->rend = SDL_CreateRenderer(app->win, -1, 0);
     app->tex = SDL_CreateTexture(app->rend, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
     app->isdrag = false;
@@ -55,16 +68,32 @@ void app_init(app_t *app, int w, int h) {
     app->running = true;
     app->redraw = true;
     app->brushsize = 1;
+    app->gui = nk_sdl_init(app->win, app->rend);
+    {
+        const float font_scale = 1;
+        struct nk_font_atlas *atlas;
+        struct nk_font_config config = nk_font_config(0);
+        struct nk_font *font;
+        nk_sdl_font_stash_begin(&atlas);
+        font = nk_font_atlas_add_default(atlas, 13 * font_scale, &config);
+        nk_sdl_font_stash_end();
+        font->handle.height /= font_scale;
+        nk_style_set_font(app->gui, &font->handle);
+    }
 }
 
 void app_clean(app_t *app) {
     free(app->fb);
 }
 
+
 void flood_fill(int x, int y, app_t *app) {
+    if (y >= app->h || y < 0 || x >= app->w || x < 0) {
+        return;
+    }
     static const int dx[] = {-1, 1, 0, 0};
     static const int dy[] = {0, 0, 1, -1};
-    uint32_t oldcolor = app->fb[y*app->w+x];
+    const uint32_t oldcolor = app->fb[y*app->w+x];
     if (oldcolor == app->color) {
         return;
     }
@@ -81,6 +110,7 @@ void flood_fill(int x, int y, app_t *app) {
             if (app->fb[nv.y*app->w + nv.x] != oldcolor) {
                 continue;
             }
+            app->fb[v.y*app->w + v.x] = app->color;
             arrpush(stack, nv);
         }
     }
@@ -121,7 +151,9 @@ void draw_line(int x1, int y1, int x2, int y2, app_t *app) {
 
 void app_event(app_t *app) {
     SDL_Event e;
+    nk_input_begin(app->gui);
     while (SDL_PollEvent(&e)) {
+        nk_sdl_handle_event(&e);
         switch (e.type) {
         case SDL_QUIT:
             app->running = false;
@@ -191,14 +223,62 @@ void app_event(app_t *app) {
             break;
         }
     }
+    nk_input_end(app->gui);
+}
+
+#define ARGB_TO_NKCOLORF(argb) { \
+    ((float)((argb >> 16) & 0xff) / 255.0f), \
+    ((float)((argb >> 8) & 0xff) / 255.0f), \
+    ((float)((argb >> 0) & 0xff) / 255.0f), \
+    ((float)((argb >> 24) & 0xff) / 255.0f) \
+}
+
+#define NKCOLORF_TO_ARGB(colorf) \
+    ((uint32_t)(colorf.r * 255.0f) << 16) | \
+    ((uint32_t)(colorf.g * 255.0f) << 8) | \
+    ((uint32_t)(colorf.b * 255.0f) << 0) | \
+    ((uint32_t)(colorf.a * 255.0f) << 24) \
+
+void app_draw_gui(app_t *app) {
+    if (nk_begin(app->gui, "Settings", nk_rect(0, app->h, app->w, GUI_HEIGHT), NK_WINDOW_MOVABLE)) {
+        nk_layout_row_dynamic(app->gui, GUI_HEIGHT, 3);
+        if (nk_group_begin(app->gui, "col1", NK_WINDOW_BORDER)) {
+            nk_layout_row_dynamic(app->gui, 20, 1);
+            nk_label(app->gui, "Brush size", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(app->gui, 20, 1);
+            nk_slider_int(app->gui, 1, &app->brushsize, MAX_BRUSHSIZE, 1);
+            nk_group_end(app->gui);
+        }
+
+        if (nk_group_begin(app->gui, "col2", NK_WINDOW_BORDER)) {
+            nk_layout_row_dynamic(app->gui, 80, 1);
+            struct nk_colorf colorf = ARGB_TO_NKCOLORF(app->color);
+            colorf = nk_color_picker(app->gui, colorf, NK_RGBA);
+            app->color = NKCOLORF_TO_ARGB(colorf);
+            nk_group_end(app->gui);
+        }
+
+        if (nk_group_begin(app->gui, "col3", NK_WINDOW_BORDER)) {
+            nk_layout_row_dynamic(app->gui, 30, 2);
+            if (nk_option_label(app->gui, "Brush", app->tool == BRUSH)) app->tool = BRUSH;
+            if (nk_option_label(app->gui, "Bucket", app->tool == BUCKET)) app->tool = BUCKET;
+            nk_group_end(app->gui);
+        }
+
+        nk_end(app->gui);
+    }
+    nk_sdl_render(NK_ANTI_ALIASING_ON);
 }
 
 void app_draw(app_t *app) {
     app->redraw = false;
     SDL_UpdateTexture(app->tex, NULL, app->fb, app->w * sizeof(*app->fb));
     SDL_RenderClear(app->rend);
-    SDL_RenderCopy(app->rend, app->tex, NULL, NULL);
-    SDL_RenderPresent(app->rend);
+    const SDL_Rect dstrect = {
+        .w = app->w,
+        .h = app->h,
+    };
+    SDL_RenderCopy(app->rend, app->tex, NULL, &dstrect);
 }
 
 void app_run(app_t *app) {
@@ -207,6 +287,8 @@ void app_run(app_t *app) {
         if (app->redraw) {
             app_draw(app);
         }
+        app_draw_gui(app);
+        SDL_RenderPresent(app->rend);
         SDL_Delay(15);
     }
 }

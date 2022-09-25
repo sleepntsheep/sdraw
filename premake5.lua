@@ -37,5 +37,5 @@ filter "configurations:MinimalFont"
 
 filter {}
 buildoptions { "-std=c2x", "-Wall", "-Wextra", "-pedantic", "-ggdb" }
-links { "SDL2", "SDL2_ttf", "SDL2_image" }
+links { "SDL2", "SDL2_ttf", "SDL2_image", "m" }
 
