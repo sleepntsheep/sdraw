@@ -3,4 +3,5 @@ Release
 obj
 sdraw
 sdraw.make
+*.jpg
 Makefile

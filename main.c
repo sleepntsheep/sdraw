@@ -3,15 +3,22 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
+
+#include <SDL2/SDL.h>
+
+#include "tinyfiledialogs.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 #define SHEEP_LOG_IMPLEMENTATION
 #include "log.h"
 #define SHEEP_DYNARRAY_IMPLEMENTATION
 #include "dynarray.h"
+
 #include "config.h"
-#include "tinyfiledialogs.h"
-#include <SDL2/SDL.h>
 
 #define NK_BUTTON_TRIGGER_ON_RELEASE
 #define NK_INCLUDE_FIXED_TYPES
@@ -36,40 +43,53 @@ const int MAX_BRUSHSIZE = 30;
 enum Tool {
     BRUSH,
     BUCKET,
+    LINE,
 };
 
 typedef struct {
     uint32_t *fb;
+    uint32_t *tfb;
     uint32_t fg;
     int w, h;
     int tool;
     int brushsize;
     bool isdrag;
     int lx, ly;
+    bool use_tfb;
 } canvas_t;
 
 typedef struct {
     struct nk_context *ctx;
     struct {
-        bool open_save_dialog;
+        bool open_dialog;
         int quality;
         const char *file_path;
-    } img;
+    } save;
     struct {
         bool open_dialog;
         int w, h;
         char wb[256], hb[256];
     } new;
+    struct {
+        bool open_dialog;
+        int w, h;
+        int channel;
+        const char *file_path;
+    } load;
 } gui_t;
 
+enum Focus {
+    FOCUS_CANVAS,
+    FOCUS_GUI,
+};
+
 typedef struct {
+    canvas_t canvas;
     SDL_Window *win;
     SDL_Renderer *rend;
     SDL_Texture *tex;
     bool running;
-    bool redraw;
     int w, h;
-    canvas_t canvas;
     gui_t gui;
 } app_t;
 
@@ -81,7 +101,11 @@ void canvas_init(canvas_t *canvas, int w, int h) {
     canvas->fb = malloc(sizeof(*canvas->fb) * w * h);
     if (canvas->fb == NULL)
         panic("Failed to allocate memory for canvas, is canvas too big?");
+    canvas->tfb = calloc(sizeof(*canvas->tfb), w * h);
+    if (canvas->tfb == NULL)
+        panic("Failed to allocate memory for canvas, is canvas too big?");
     memset(canvas->fb, 0xFF, sizeof(*canvas->fb) * w * h);
+    memset(canvas->tfb, 0x00, sizeof(*canvas->tfb) * w * h);
     canvas->isdrag = false;
     canvas->brushsize = 1;
     canvas->tool = BRUSH;
@@ -94,13 +118,20 @@ void canvas_init(canvas_t *canvas, int w, int h) {
 void canvas_set_pixel(canvas_t *canvas, int x, int y) {
     if (x < 0 || y < 0 || x >= canvas->w || y >= canvas->h)
         return;
-    canvas->fb[y * canvas->w + x] = canvas->fg;
+    if (canvas->use_tfb) {
+        canvas->tfb[y * canvas->w + x] = canvas->fg;
+    } else {
+        canvas->fb[y * canvas->w + x] = canvas->fg;
+    }
 }
 
 uint32_t canvas_get_pixel(canvas_t *canvas, int x, int y) {
-    return canvas->fb[y * canvas->w + x];
+    if (canvas->use_tfb) {
+        return canvas->tfb[y * canvas->w + x];
+    } else {
+        return canvas->fb[y * canvas->w + x];
+    }
 }
-
 
 void app_init(app_t *app, int w, int h) {
     /* w, h params are canvas size, app->w and app->h is different */
@@ -110,10 +141,11 @@ void app_init(app_t *app, int w, int h) {
     app->win = SDL_CreateWindow("sdraw", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, app->w, h + GUI_HEIGHT, SDL_WINDOW_SHOWN);
     app->rend = SDL_CreateRenderer(app->win, -1, 0);
     app->tex = SDL_CreateTexture(app->rend, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
+    SDL_SetTextureBlendMode(app->tex, SDL_BLENDMODE_BLEND);
     app->running = true;
-    app->redraw = true;
     canvas_init(&app->canvas, w, h);
     app->gui.ctx = nk_sdl_init(app->win, app->rend);
+    app->gui.save.quality = 100;
     {
         const float font_scale = 1;
         struct nk_font_atlas *atlas;
@@ -132,6 +164,7 @@ void app_clean(app_t *app) {
     SDL_DestroyRenderer(app->rend);
     SDL_DestroyWindow(app->win);
     free(app->canvas.fb);
+    free(app->canvas.tfb);
 }
 
 void canvas_save(canvas_t *canvas, const char *file_name, int quality) {
@@ -159,8 +192,7 @@ void canvas_flood_fill(canvas_t *canvas, int x, int y) {
     arrpush(stack, ((vec2i_t){x, y}));
     while (arrlen(stack) > 0) {
         vec2i_t v = arrpop(stack);
-        canvas_set_pixel(canvas, v.x, v.y);
-        for (int i = 0; i < 4; i++) {
+        canvas_set_pixel(canvas, v.x, v.y); for (int i = 0; i < 4; i++) {
             vec2i_t nv = {v.x + dx[i], v.y + dy[i]};
             if (nv.x >= canvas->w || nv.x < 0 || nv.y >= canvas->h || nv.y < 0) {
                 continue;
@@ -207,11 +239,13 @@ void canvas_draw_line(canvas_t *canvas, int x1, int y1, int x2, int y2) {
     }
 }
 
-bool canvas_event(canvas_t *canvas, SDL_Event e) {
-    bool redraw = true;
+void canvas_event(canvas_t *canvas, SDL_Event e) {
     switch (e.type) {
         case SDL_MOUSEBUTTONDOWN:
-            if (canvas->tool == BRUSH) {
+            if (e.button.x < 0 || e.button.x >= canvas->w || e.button.y < 0 || e.button.y >= canvas->h) {
+                break;
+            }
+            if (canvas->tool == BRUSH || canvas->tool == LINE) {
                 canvas->isdrag = true;
                 canvas->lx = e.button.x;
                 canvas->ly = e.button.y;
@@ -221,11 +255,12 @@ bool canvas_event(canvas_t *canvas, SDL_Event e) {
             canvas->isdrag = false;
             if (canvas->tool == BUCKET) {
                 canvas_flood_fill(canvas, e.button.x, e.button.y);
-                redraw = true;
+            } else if (canvas->tool == LINE) {
+                canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x, e.motion.y);
             }
             break;
         case SDL_MOUSEMOTION:
-            if (canvas->isdrag) {
+            if (canvas->tool == BRUSH && canvas->isdrag) {
                 int x = e.motion.x;
                 int y = e.motion.y;
                 if (x >= canvas->w || y >= canvas->h)
@@ -233,7 +268,11 @@ bool canvas_event(canvas_t *canvas, SDL_Event e) {
                 canvas_draw_line(canvas, canvas->lx, canvas->ly, x, y);
                 canvas->lx = x;
                 canvas->ly = y;
-                redraw = true;
+            } else if (canvas->tool == LINE && canvas->isdrag) {
+                canvas->use_tfb = true;
+                memset(canvas->tfb, 0, canvas->w * canvas->h * sizeof(uint32_t));
+                canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x, e.motion.y);
+                canvas->use_tfb = false;
             }
             break;
         case SDL_KEYDOWN:
@@ -268,26 +307,21 @@ bool canvas_event(canvas_t *canvas, SDL_Event e) {
             }
             break;
     }
-    return redraw;
 }
 
 void app_event(app_t *app) {
     SDL_Event e;
     nk_input_begin(app->gui.ctx);
     while (SDL_PollEvent(&e)) {
-        nk_sdl_handle_event(&e);
-        app->redraw |= canvas_event(&app->canvas, e);
+        if (!nk_item_is_any_active(app->gui.ctx)) {
+            canvas_event(&app->canvas, e);
+        }
         switch (e.type) {
         case SDL_QUIT:
             app->running = false;
             break;
-        case SDL_WINDOWEVENT:
-            switch (e.window.event) {
-                case SDL_WINDOWEVENT_EXPOSED:
-                    app->redraw = true;
-            }
-            break;
         }
+        nk_sdl_handle_event(&e);
     }
     nk_input_end(app->gui.ctx);
 }
@@ -318,14 +352,18 @@ void app_draw_gui(app_t *app) {
             }
             nk_layout_row_dynamic(gui.ctx, 20, 1);
             if (nk_button_label(gui.ctx, "Save")) {
-                gui.img.open_save_dialog = true;
+                gui.save.open_dialog = true;
+            }
+            nk_layout_row_dynamic(gui.ctx, 20, 1);
+            if (nk_button_label(gui.ctx, "Load")) {
+                gui.load.open_dialog = true;
             }
             nk_group_end(gui.ctx);
         }
         
         if (nk_group_begin(gui.ctx, "col1", NK_WINDOW_BORDER)) {
             nk_layout_row_dynamic(gui.ctx, 20, 1);
-            nk_label(gui.ctx, "Brush size", NK_TEXT_LEFT);
+            nk_label(gui.ctx, "Tool size", NK_TEXT_LEFT);
             nk_layout_row_dynamic(gui.ctx, 20, 1);
             nk_slider_int(gui.ctx, 1, &app->canvas.brushsize, MAX_BRUSHSIZE, 1);
             nk_group_end(gui.ctx);
@@ -343,29 +381,33 @@ void app_draw_gui(app_t *app) {
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             if (nk_option_label(gui.ctx, "Brush", app->canvas.tool == BRUSH)) app->canvas.tool = BRUSH;
             if (nk_option_label(gui.ctx, "Bucket", app->canvas.tool == BUCKET)) app->canvas.tool = BUCKET;
+            if (nk_option_label(gui.ctx, "Line", app->canvas.tool == LINE)) app->canvas.tool = LINE;
             nk_group_end(gui.ctx);
         }
     }
     nk_end(gui.ctx);
 
-    if (gui.img.open_save_dialog) {
+    if (gui.save.open_dialog) {
         if (nk_begin(gui.ctx, "Save", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
             nk_layout_row_dynamic(gui.ctx, 30, 1);
-            if (nk_button_label(gui.ctx, gui.img.file_path ? gui.img.file_path : "Select file path" )) {
-                gui.img.file_path = tinyfd_saveFileDialog("Select where to save",
+            if (nk_button_label(gui.ctx, gui.save.file_path ? gui.save.file_path : "Select file path" )) {
+                gui.save.file_path = tinyfd_saveFileDialog("Select where to save",
                         "image.jpg", 0, NULL, "jpg image");
             }
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             nk_label(gui.ctx, "Quality", NK_TEXT_LEFT);
-            nk_slider_int(gui.ctx, 1, &gui.img.quality, 10, 1);
+            nk_slider_int(gui.ctx, 1, &gui.save.quality, 100, 1);
             nk_layout_row_dynamic(gui.ctx, 30, 1);
-            if (gui.img.file_path != NULL) {
+            if (gui.save.file_path != NULL) {
                 if (nk_button_label(gui.ctx, "Save")) {
-                    canvas_save(&app->canvas, gui.img.file_path, gui.img.quality);
-                    gui.img.open_save_dialog = false;
-                    gui.img.file_path = NULL;
+                    canvas_save(&app->canvas, gui.save.file_path, gui.save.quality);
+                    gui.save.open_dialog = false;
+                    gui.save.file_path = NULL;
                 }
             }
+        }
+        else {
+            gui.save.open_dialog = false;
         }
         nk_end(gui.ctx);
     }
@@ -388,8 +430,53 @@ void app_draw_gui(app_t *app) {
                 gui.new.w = strtol(gui.new.wb, NULL, 10);
                 gui.new.h = strtol(gui.new.hb, NULL, 10);
                 app_clean(app);
-                return app_init(app, gui.new.w, gui.new.h);
+                app_init(app, gui.new.w, gui.new.h);
+                return;
             }
+        }
+        else {
+            gui.new.open_dialog = false;
+        }
+        nk_end(gui.ctx);
+    }
+
+    if (gui.load.open_dialog) {
+        if (nk_begin(gui.ctx, "Load Image", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
+            nk_layout_row_dynamic(gui.ctx, 30, 1);
+            if (nk_button_label(gui.ctx, gui.load.file_path ? gui.load.file_path : "Select file path" )) {
+                gui.load.file_path = tinyfd_openFileDialog("Which file to laod from", ".", 0, NULL, "Image files", false);
+                if (gui.load.file_path == NULL) {
+                    gui.load.open_dialog = false;
+                    warn("Failed getting file path");
+                }
+            }
+            if (nk_button_label(gui.ctx, "Load")) {
+                FILE *f = fopen(gui.load.file_path, "r");
+                if (f == NULL) {
+                    warn("Failed opening file for reading image");
+                } else {
+                    unsigned char *data = stbi_load_from_file(f, &gui.load.w, &gui.load.h, &gui.load.channel, 4);
+                    if (data == NULL) {
+                        gui.load.open_dialog = false;
+                        warn("Failed opening image file");
+                    } else {
+                        uint32_t *in_argb = malloc(gui.load.w * gui.load.h * 4);
+                        for (int i = 0; i < gui.load.w * gui.load.h; i++) {
+                            in_argb[i] = (data[i * 4 + 3] << 24) | (data[i * 4 + 0] << 16) | (data[i * 4 + 1] << 8) | (data[i * 4 + 2] << 0);
+                        }
+                        app_clean(app);
+                        app_init(app, gui.load.w, gui.load.h);
+                        memcpy(app->canvas.fb, in_argb, gui.load.w * gui.load.h * 4);
+                        free(in_argb);
+                        free(data);
+                        return;
+                    }
+                    fclose(f);
+                }
+            }
+        }
+        else {
+            gui.load.open_dialog = false;
         }
         nk_end(gui.ctx);
     }
@@ -398,8 +485,7 @@ void app_draw_gui(app_t *app) {
     app->gui = gui;
 }
 
-void app_draw(app_t *app) {
-    app->redraw = false;
+void app_draw_canvas(app_t *app) {
     SDL_SetRenderDrawColor(app->rend, 0, 0, 0, 255);
     SDL_RenderClear(app->rend);
     SDL_UpdateTexture(app->tex, NULL, app->canvas.fb, app->canvas.w * sizeof(*app->canvas.fb));
@@ -408,14 +494,14 @@ void app_draw(app_t *app) {
         .h = app->canvas.h,
     };
     SDL_RenderCopy(app->rend, app->tex, NULL, &dstrect);
+    SDL_UpdateTexture(app->tex, NULL, app->canvas.tfb, app->canvas.w * sizeof(*app->canvas.tfb));
+    SDL_RenderCopy(app->rend, app->tex, NULL, &dstrect);
 }
 
 void app_run(app_t *app) {
     while (app->running) {
         app_event(app);
-        if (app->redraw) {
-            app_draw(app);
-        }
+        app_draw_canvas(app);
         app_draw_gui(app);
         SDL_RenderPresent(app->rend);
         SDL_Delay(15);
