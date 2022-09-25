@@ -36,6 +36,7 @@ optimize "On"
 filter "configurations:MinimalFont"
 
 filter {}
+defines { "_DEFAULT_SOURCE" }
 buildoptions { "-std=c2x", "-Wall", "-Wextra", "-pedantic", "-ggdb" }
-links { "SDL2", "SDL2_ttf", "SDL2_image", "m" }
+links { "SDL2", "SDL2_ttf", "SDL2_image", "m", "fontconfig" }
 

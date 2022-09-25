@@ -6,6 +6,7 @@
  *   - lasso select tool
  *   - undo & redo
  *   - png export
+ *   - text tool
  *
  *  sleepntsheep 2022
  */
@@ -27,9 +28,11 @@
 #include "stb_image_write.h"
 #define SHEEP_LOG_IMPLEMENTATION
 #include "log.h"
-#define SHEEP_DYNARRAY_IMPLEMENTATION
-#include "dynarray.h"
+#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"
 
+
+#include "font.h"
 #include "config.h"
 
 #define NK_BUTTON_TRIGGER_ON_RELEASE
@@ -56,6 +59,7 @@ enum Tool {
     BRUSH,
     BUCKET,
     LINE,
+    TEXT,
 };
 
 typedef struct {
@@ -103,6 +107,11 @@ typedef struct {
     bool running;
     int w, h;
     gui_t gui;
+    struct {
+        char **font_arr;
+        char *font_path;
+        stbtt_fontinfo info;
+    } font;
 } app_t;
 
 typedef struct {
@@ -148,6 +157,7 @@ uint32_t canvas_get_pixel(canvas_t *canvas, int x, int y) {
 void app_init(app_t *app, int w, int h) {
     /* w, h params are canvas size, app->w and app->h is different */
     memset(app, 0, sizeof(app_t));
+    app->font.font_arr = get_all_fonts();
     app->w = MAX(w, 500);
     app->h = h;
     app->win = SDL_CreateWindow("sdraw", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, app->w, h + GUI_HEIGHT, SDL_WINDOW_SHOWN);
@@ -171,12 +181,35 @@ void app_init(app_t *app, int w, int h) {
     }
 }
 
+void app_load_font(app_t *app) {
+    long size;
+    unsigned char* buf;
+    FILE* f = fopen(app->font.font_path, "rb");
+    fseek(f, 0, SEEK_END);
+    size = ftell(f); /* how long is the file ? */
+    fseek(f, 0, SEEK_SET); /* reset */
+    buf = malloc(size);
+    fread(buf, size, 1, f);
+    fclose(f);
+
+    stbtt_fontinfo info;
+    if (!stbtt_InitFont(&info, buf, 0)) {
+        warn("stbtt Failed loading font");
+    }
+
+
+}
+
 void app_clean(app_t *app) {
     SDL_DestroyTexture(app->tex);
     SDL_DestroyRenderer(app->rend);
     SDL_DestroyWindow(app->win);
     free(app->canvas.fb);
     free(app->canvas.tfb);
+    for (int i = 0; i < arrlen(app->font.font_arr); i++) {
+        free(app->font.font_arr[i]);
+    }
+    free(app->font.font_arr);
 }
 
 void canvas_save(canvas_t *canvas, const char *file_name, int quality) {
@@ -200,7 +233,7 @@ void canvas_flood_fill(canvas_t *canvas, int x, int y) {
     if (oldcolor == canvas->fg) {
         return;
     }
-    vec2i_t *stack = arrnew(vec2i_t);
+    vec2i_t *stack = NULL;
     arrpush(stack, ((vec2i_t){x, y}));
     while (arrlen(stack) > 0) {
         vec2i_t v = arrpop(stack);
@@ -532,6 +565,7 @@ int main(int argc, char **argv) {
     }
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+
 
     app_t app;
     app_init(&app, w, h);
