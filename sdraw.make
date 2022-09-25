@@ -75,7 +75,9 @@ GENERATED :=
 OBJECTS :=
 
 GENERATED += $(OBJDIR)/main.o
+GENERATED += $(OBJDIR)/tinyfiledialogs.o
 OBJECTS += $(OBJDIR)/main.o
+OBJECTS += $(OBJDIR)/tinyfiledialogs.o
 
 # Rules
 # #############################################
@@ -140,6 +142,9 @@ endif
 # #############################################
 
 $(OBJDIR)/main.o: main.c
+	@echo $(notdir $<)
+	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
+$(OBJDIR)/tinyfiledialogs.o: tinyfiledialogs.c
 	@echo $(notdir $<)
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -MF "$(@:%.o=%.d)" -c "$<"
 
