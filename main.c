@@ -550,7 +550,7 @@ void app_draw_gui(app_t *app) {
                     unsigned char *data = stbi_load_from_file(f, &gui.load.w, &gui.load.h, &gui.load.channel, 4);
                     if (data == NULL) {
                         gui.load.open_dialog = false;
-                        warn("Failed opening image file");
+                        warn("Failed opening image file %s", stbi_failure_reason());
                     } else {
                         uint32_t *in_argb = malloc(gui.load.w * gui.load.h * 4);
                         for (int i = 0; i < gui.load.w * gui.load.h; i++) {
