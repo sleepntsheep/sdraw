@@ -20,6 +20,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
+#define STBI_ONLY_JPEG
 #include "tinyfiledialogs.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -484,7 +485,7 @@ void app_draw_gui(app_t *app) {
             nk_layout_row_dynamic(gui.ctx, 30, 1);
             if (nk_button_label(gui.ctx, gui.save.file_path ? gui.save.file_path : "Select file path" )) {
                 gui.save.file_path = tinyfd_saveFileDialog("Select where to save",
-                        "image.jpg", 0, NULL, "jpg image");
+                        "image.jpg", 2, (const char*[]){"*.jpg", "*.jpeg"}, "jpg image");
             }
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             nk_label(gui.ctx, "Quality", NK_TEXT_LEFT);
@@ -536,14 +537,14 @@ void app_draw_gui(app_t *app) {
         if (nk_begin(gui.ctx, "Load Image", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
             nk_layout_row_dynamic(gui.ctx, 30, 1);
             if (nk_button_label(gui.ctx, gui.load.file_path ? gui.load.file_path : "Select file path" )) {
-                gui.load.file_path = tinyfd_openFileDialog("Which file to load from", "", 0, NULL, "Image files", false);
+                gui.load.file_path = tinyfd_openFileDialog("Which file to load from", "", 2, (const char*[]){"*.jpg", "*.jpeg"}, "JPG Image files", false);
                 if (gui.load.file_path == NULL) {
                     gui.load.open_dialog = false;
                     warn("Failed getting file path");
                 }
             }
             if (nk_button_label(gui.ctx, "Load")) {
-                unsigned char *data = stbi_load(gui.load.file_path, &gui.load.w, &gui.load.h, &gui.load.channel, 3);
+                unsigned char *data = stbi_load(gui.load.file_path, &gui.load.w, &gui.load.h, &gui.load.channel, 4);
                 if (data == NULL) {
                     gui.load.open_dialog = false;
                     warn("Failed opening image file %s", stbi_failure_reason());
