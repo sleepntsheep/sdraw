@@ -6,7 +6,7 @@
  *   - lasso select tool
  *   - undo & redo
  *   - png export
- *   - text tool
+ *   done - text tool
  *
  *  sleepntsheep 2022
  */
@@ -204,7 +204,7 @@ void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text, const ch
         warn("Failed to load font: %s", font_path);
         return;
     }
-    surf = TTF_RenderText_Blended(font, text, (SDL_Color){0, 0, 0, 255});
+    surf = TTF_RenderUTF8_Blended(font, text, (SDL_Color){0, 0, 0, 255});
     if (surf == NULL) {
         warn("Failed to render text");
         return;
