@@ -536,7 +536,7 @@ void app_draw_gui(app_t *app) {
         if (nk_begin(gui.ctx, "Load Image", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
             nk_layout_row_dynamic(gui.ctx, 30, 1);
             if (nk_button_label(gui.ctx, gui.load.file_path ? gui.load.file_path : "Select file path" )) {
-                gui.load.file_path = tinyfd_openFileDialog("Which file to laod from", ".", 0, NULL, "Image files", false);
+                gui.load.file_path = tinyfd_openFileDialog("Which file to load from", "", 0, NULL, "Image files", false);
                 if (gui.load.file_path == NULL) {
                     gui.load.open_dialog = false;
                     warn("Failed getting file path");
