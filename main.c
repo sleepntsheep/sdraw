@@ -543,27 +543,21 @@ void app_draw_gui(app_t *app) {
                 }
             }
             if (nk_button_label(gui.ctx, "Load")) {
-                FILE *f = fopen(gui.load.file_path, "r");
-                if (f == NULL) {
-                    warn("Failed opening file for reading image");
+                unsigned char *data = stbi_load(gui.load.file_path, &gui.load.w, &gui.load.h, &gui.load.channel, 3);
+                if (data == NULL) {
+                    gui.load.open_dialog = false;
+                    warn("Failed opening image file %s", stbi_failure_reason());
                 } else {
-                    unsigned char *data = stbi_load_from_file(f, &gui.load.w, &gui.load.h, &gui.load.channel, 4);
-                    if (data == NULL) {
-                        gui.load.open_dialog = false;
-                        warn("Failed opening image file %s", stbi_failure_reason());
-                    } else {
-                        uint32_t *in_argb = malloc(gui.load.w * gui.load.h * 4);
-                        for (int i = 0; i < gui.load.w * gui.load.h; i++) {
-                            in_argb[i] = (data[i * 4 + 3] << 24) | (data[i * 4 + 0] << 16) | (data[i * 4 + 1] << 8) | (data[i * 4 + 2] << 0);
-                        }
-                        app_clean(app);
-                        app_init(app, gui.load.w, gui.load.h);
-                        memcpy(app->canvas.fb, in_argb, gui.load.w * gui.load.h * 4);
-                        free(in_argb);
-                        free(data);
-                        return;
+                    uint32_t *in_argb = malloc(gui.load.w * gui.load.h * 4);
+                    for (int i = 0; i < gui.load.w * gui.load.h; i++) {
+                        in_argb[i] = (data[i * 4 + 3] << 24) | (data[i * 4 + 0] << 16) | (data[i * 4 + 1] << 8) | (data[i * 4 + 2] << 0);
                     }
-                    fclose(f);
+                    app_clean(app);
+                    app_init(app, gui.load.w, gui.load.h);
+                    memcpy(app->canvas.fb, in_argb, gui.load.w * gui.load.h * 4);
+                    free(in_argb);
+                    free(data);
+                    return;
                 }
             }
         }
