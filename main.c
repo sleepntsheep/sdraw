@@ -18,6 +18,7 @@
 #include <stddef.h>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 
 #include "tinyfiledialogs.h"
 #define STB_IMAGE_IMPLEMENTATION
@@ -92,6 +93,14 @@ typedef struct {
         int channel;
         const char *file_path;
     } load;
+    struct {
+        bool open_dialog;
+        char buf[1024];
+        char size_buf[1024];
+        int selidx;
+        int size;
+        int x, y;
+    } text;
 } gui_t;
 
 enum Focus {
@@ -107,11 +116,8 @@ typedef struct {
     bool running;
     int w, h;
     gui_t gui;
-    struct {
-        char **font_arr;
-        char *font_path;
-        stbtt_fontinfo info;
-    } font;
+    sdraw_font_t *font_arr;
+    const char **font_name_arr;
 } app_t;
 
 typedef struct {
@@ -146,6 +152,7 @@ void canvas_set_pixel(canvas_t *canvas, int x, int y) {
     }
 }
 
+
 uint32_t canvas_get_pixel(canvas_t *canvas, int x, int y) {
     if (canvas->use_tfb) {
         return canvas->tfb[y * canvas->w + x];
@@ -157,7 +164,13 @@ uint32_t canvas_get_pixel(canvas_t *canvas, int x, int y) {
 void app_init(app_t *app, int w, int h) {
     /* w, h params are canvas size, app->w and app->h is different */
     memset(app, 0, sizeof(app_t));
-    app->font.font_arr = get_all_fonts();
+    app->font_arr = get_all_fonts();
+    qsort(app->font_arr, stbds_arrlen(app->font_arr), sizeof(sdraw_font_t), sdraw_font_cmp);
+    app->font_name_arr = NULL;
+    for (int i = 0; i < stbds_arrlen(app->font_arr); i++) {
+        arrpush(app->font_name_arr, app->font_arr[i].name);
+        assert(app->font_arr[i].name == app->font_name_arr[i]);
+    }
     app->w = MAX(w, 500);
     app->h = h;
     app->win = SDL_CreateWindow("sdraw", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, app->w, h + GUI_HEIGHT, SDL_WINDOW_SHOWN);
@@ -168,6 +181,7 @@ void app_init(app_t *app, int w, int h) {
     canvas_init(&app->canvas, w, h);
     app->gui.ctx = nk_sdl_init(app->win, app->rend);
     app->gui.save.quality = 100;
+    app->gui.text.selidx = 0;
     {
         const float font_scale = 1;
         struct nk_font_atlas *atlas;
@@ -181,23 +195,49 @@ void app_init(app_t *app, int w, int h) {
     }
 }
 
-void app_load_font(app_t *app) {
-    long size;
-    unsigned char* buf;
-    FILE* f = fopen(app->font.font_path, "rb");
-    fseek(f, 0, SEEK_END);
-    size = ftell(f); /* how long is the file ? */
-    fseek(f, 0, SEEK_SET); /* reset */
-    buf = malloc(size);
-    fread(buf, size, 1, f);
-    fclose(f);
-
-    stbtt_fontinfo info;
-    if (!stbtt_InitFont(&info, buf, 0)) {
-        warn("stbtt Failed loading font");
+void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text, const char *font_path, int font_size) {
+    /* TODO: make it less hacky (stbtt would be great); */
+    TTF_Font *font;
+    SDL_Surface *surf;
+    font = TTF_OpenFont(font_path, font_size);
+    if (font == NULL) {
+        warn("Failed to load font: %s", font_path);
+        return;
+    }
+    surf = TTF_RenderText_Blended(font, text, (SDL_Color){0, 0, 0, 255});
+    if (surf == NULL) {
+        warn("Failed to render text");
+        return;
+    }
+    // texture from surf
+    SDL_Renderer *rend = SDL_CreateSoftwareRenderer(surf);
+    SDL_Texture *tex = SDL_CreateTextureFromSurface(rend, surf);
+    if (tex == NULL) {
+        warn("Failed to create texture from surface");
+        return;
+    }
+    if (rend == NULL) {
+        warn("Failed to create software renderer");
+        return;
+    }
+    for (int i = 0; i < surf->w; i++) {
+        for (int j = 0; j < surf->h; j++) {
+            uint32_t pixel;
+            SDL_RenderReadPixels(rend, &(SDL_Rect){i, j, 1, 1}, SDL_PIXELFORMAT_ARGB8888, &pixel, sizeof(pixel));
+            if (pixel != 0) {
+                /* alpha is not zero (cuz r,g,b is zero) */
+                canvas_set_pixel(canvas, x + i, y + j);
+                canvas->fg = (pixel & 0xFFFFFF00) | (canvas->fg & 0xFF);
+                canvas_set_pixel(canvas, x + i, y + j);
+            }
+        }
     }
 
-
+    SDL_UnlockSurface(surf);
+    SDL_DestroyTexture(tex);
+    SDL_FreeSurface(surf);
+    SDL_DestroyRenderer(rend);
+    TTF_CloseFont(font);
 }
 
 void app_clean(app_t *app) {
@@ -206,10 +246,11 @@ void app_clean(app_t *app) {
     SDL_DestroyWindow(app->win);
     free(app->canvas.fb);
     free(app->canvas.tfb);
-    for (int i = 0; i < arrlen(app->font.font_arr); i++) {
-        free(app->font.font_arr[i]);
+    for (int i = 0; i < arrlen(app->font_arr); i++) {
+        free(app->font_arr[i].name);
     }
-    free(app->font.font_arr);
+    arrfree(app->font_arr);
+    arrfree(app->font_name_arr);
 }
 
 void canvas_save(canvas_t *canvas, const char *file_name, int quality) {
@@ -235,9 +276,10 @@ void canvas_flood_fill(canvas_t *canvas, int x, int y) {
     }
     vec2i_t *stack = NULL;
     arrpush(stack, ((vec2i_t){x, y}));
+    canvas_set_pixel(canvas, x, y);
     while (arrlen(stack) > 0) {
         vec2i_t v = arrpop(stack);
-        canvas_set_pixel(canvas, v.x, v.y); for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 4; i++) {
             vec2i_t nv = {v.x + dx[i], v.y + dy[i]};
             if (nv.x >= canvas->w || nv.x < 0 || nv.y >= canvas->h || nv.y < 0) {
                 continue;
@@ -284,7 +326,7 @@ void canvas_draw_line(canvas_t *canvas, int x1, int y1, int x2, int y2) {
     }
 }
 
-void canvas_event(canvas_t *canvas, SDL_Event e) {
+void canvas_event(canvas_t *canvas, SDL_Event e, gui_t *gui) {
     switch (e.type) {
         case SDL_MOUSEBUTTONDOWN:
             if (e.button.x < 0 || e.button.x >= canvas->w || e.button.y < 0 || e.button.y >= canvas->h) {
@@ -302,6 +344,10 @@ void canvas_event(canvas_t *canvas, SDL_Event e) {
                 canvas_flood_fill(canvas, e.button.x, e.button.y);
             } else if (canvas->tool == LINE) {
                 canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x, e.motion.y);
+            } else if (canvas->tool == TEXT) {
+                gui->text.open_dialog = true;
+                gui->text.x = e.button.x;
+                gui->text.y = e.button.y;
             }
             break;
         case SDL_MOUSEMOTION:
@@ -359,7 +405,7 @@ void app_event(app_t *app) {
     nk_input_begin(app->gui.ctx);
     while (SDL_PollEvent(&e)) {
         if (!nk_item_is_any_active(app->gui.ctx)) {
-            canvas_event(&app->canvas, e);
+            canvas_event(&app->canvas, e, &app->gui);
         }
         switch (e.type) {
         case SDL_QUIT:
@@ -427,6 +473,7 @@ void app_draw_gui(app_t *app) {
             if (nk_option_label(gui.ctx, "Brush", app->canvas.tool == BRUSH)) app->canvas.tool = BRUSH;
             if (nk_option_label(gui.ctx, "Bucket", app->canvas.tool == BUCKET)) app->canvas.tool = BUCKET;
             if (nk_option_label(gui.ctx, "Line", app->canvas.tool == LINE)) app->canvas.tool = LINE;
+            if (nk_option_label(gui.ctx, "Text", app->canvas.tool == TEXT)) app->canvas.tool = TEXT;
             nk_group_end(gui.ctx);
         }
     }
@@ -526,6 +573,31 @@ void app_draw_gui(app_t *app) {
         nk_end(gui.ctx);
     }
 
+    if (gui.text.open_dialog) {
+        if (nk_begin(gui.ctx, "Draw Text", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
+            nk_layout_row_dynamic(gui.ctx, 30, 1);
+            nk_combobox(gui.ctx, (const char**)app->font_name_arr, arrlen(app->font_name_arr), &gui.text.selidx,
+                    30, nk_vec2(350, 400));
+
+            nk_layout_row_dynamic(gui.ctx, 30, 1);
+            nk_edit_string_zero_terminated(
+                gui.ctx, NK_EDIT_BOX, gui.text.buf, sizeof(gui.text.buf), 0
+            );
+            nk_layout_row_dynamic(gui.ctx, 30, 2);
+            nk_label(gui.ctx, "Size", NK_TEXT_LEFT);
+            nk_slider_int(gui.ctx, 1, &gui.text.size, 72, 1);
+            nk_layout_row_dynamic(gui.ctx, 30, 2);
+            if (nk_button_label(gui.ctx, "Draw")) {
+                canvas_draw_text(&app->canvas, gui.text.x, gui.text.y, gui.text.buf,
+                        app->font_arr[gui.text.selidx].path, gui.text.size);
+                gui.text.open_dialog = false;
+            }
+        } else {
+            gui.text.open_dialog = false;
+        }
+        nk_end(gui.ctx);
+    }
+
     nk_sdl_render(NK_ANTI_ALIASING_ON);
     app->gui = gui;
 }
@@ -564,8 +636,12 @@ int main(int argc, char **argv) {
         }
     }
 
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
-
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) < 0) {
+        warn("SDL_Init Failed %s", SDL_GetError());
+    }
+    if (TTF_Init() < 0) {
+        warn("TTF_Init Failed %s", TTF_GetError());
+    }
 
     app_t app;
     app_init(&app, w, h);
