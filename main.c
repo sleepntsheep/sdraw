@@ -591,6 +591,7 @@ void app_draw_gui(app_t *app) {
                 canvas_draw_text(&app->canvas, gui.text.x, gui.text.y, gui.text.buf,
                         app->font_arr[gui.text.selidx].path, gui.text.size);
                 gui.text.open_dialog = false;
+                gui.text.buf[0] = 0;
             }
         } else {
             gui.text.open_dialog = false;
