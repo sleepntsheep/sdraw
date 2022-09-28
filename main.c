@@ -1,4 +1,4 @@
-/*  sdraw - simple paint program 
+/*  sdraw - simple paint program
  *
  *  TODO
  *   - rectangle tool
@@ -11,17 +11,17 @@
  *  sleepntsheep 2022
  */
 
-#include <stdio.h>
 #include <stdbool.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
-#define STBI_ONLY_JPEG
 #include "tinyfiledialogs.h"
+#define STBI_ONLY_JPEG
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
@@ -33,9 +33,8 @@
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"
 
-
-#include "font.h"
 #include "config.h"
+#include "font.h"
 
 #define NK_BUTTON_TRIGGER_ON_RELEASE
 #define NK_INCLUDE_FIXED_TYPES
@@ -51,8 +50,8 @@
 #include "nuklear_sdl_renderer.h"
 
 #define UNUSED(a) ((void)(a))
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 const int GUI_HEIGHT = 100;
 const int MAX_BRUSHSIZE = 30;
@@ -153,7 +152,6 @@ void canvas_set_pixel(canvas_t *canvas, int x, int y) {
     }
 }
 
-
 uint32_t canvas_get_pixel(canvas_t *canvas, int x, int y) {
     if (canvas->use_tfb) {
         return canvas->tfb[y * canvas->w + x];
@@ -166,7 +164,8 @@ void app_init(app_t *app, int w, int h) {
     /* w, h params are canvas size, app->w and app->h is different */
     memset(app, 0, sizeof(app_t));
     app->font_arr = get_all_fonts();
-    qsort(app->font_arr, stbds_arrlen(app->font_arr), sizeof(sdraw_font_t), sdraw_font_cmp);
+    qsort(app->font_arr, stbds_arrlen(app->font_arr), sizeof(sdraw_font_t),
+          sdraw_font_cmp);
     app->font_name_arr = NULL;
     for (int i = 0; i < stbds_arrlen(app->font_arr); i++) {
         arrpush(app->font_name_arr, app->font_arr[i].name);
@@ -174,9 +173,12 @@ void app_init(app_t *app, int w, int h) {
     }
     app->w = MAX(w, 500);
     app->h = h;
-    app->win = SDL_CreateWindow("sdraw", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, app->w, h + GUI_HEIGHT, SDL_WINDOW_SHOWN);
+    app->win = SDL_CreateWindow("sdraw", SDL_WINDOWPOS_CENTERED,
+                                SDL_WINDOWPOS_CENTERED, app->w, h + GUI_HEIGHT,
+                                SDL_WINDOW_SHOWN);
     app->rend = SDL_CreateRenderer(app->win, -1, 0);
-    app->tex = SDL_CreateTexture(app->rend, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
+    app->tex = SDL_CreateTexture(app->rend, SDL_PIXELFORMAT_ARGB8888,
+                                 SDL_TEXTUREACCESS_STREAMING, w, h);
     SDL_SetTextureBlendMode(app->tex, SDL_BLENDMODE_BLEND);
     app->running = true;
     canvas_init(&app->canvas, w, h);
@@ -196,7 +198,8 @@ void app_init(app_t *app, int w, int h) {
     }
 }
 
-void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text, const char *font_path, int font_size) {
+void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text,
+                      const char *font_path, int font_size) {
     /* TODO: make it less hacky (stbtt would be great); */
     TTF_Font *font;
     SDL_Surface *surf;
@@ -224,7 +227,9 @@ void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text, const ch
     for (int i = 0; i < surf->w; i++) {
         for (int j = 0; j < surf->h; j++) {
             uint32_t pixel;
-            SDL_RenderReadPixels(rend, &(SDL_Rect){i, j, 1, 1}, SDL_PIXELFORMAT_ARGB8888, &pixel, sizeof(pixel));
+            SDL_RenderReadPixels(rend, &(SDL_Rect){i, j, 1, 1},
+                                 SDL_PIXELFORMAT_ARGB8888, &pixel,
+                                 sizeof(pixel));
             if (pixel != 0) {
                 /* alpha is not zero (cuz r,g,b is zero) */
                 canvas_set_pixel(canvas, x + i, y + j);
@@ -257,9 +262,9 @@ void app_clean(app_t *app) {
 void canvas_save(canvas_t *canvas, const char *file_name, int quality) {
     char *in_rgba = malloc(3 * canvas->w * canvas->h);
     for (int i = 0; i < canvas->w * canvas->h; i++) {
-        in_rgba[i*3] = (canvas->fb[i] >> 16) & 0xFF;
-        in_rgba[i*3+1] = (canvas->fb[i] >> 8) & 0xFF;
-        in_rgba[i*3+2] = (canvas->fb[i]) & 0xFF;
+        in_rgba[i * 3] = (canvas->fb[i] >> 16) & 0xFF;
+        in_rgba[i * 3 + 1] = (canvas->fb[i] >> 8) & 0xFF;
+        in_rgba[i * 3 + 2] = (canvas->fb[i]) & 0xFF;
     }
     stbi_write_jpg(file_name, canvas->w, canvas->h, 3, in_rgba, quality);
     free(in_rgba);
@@ -282,7 +287,8 @@ void canvas_flood_fill(canvas_t *canvas, int x, int y) {
         vec2i_t v = arrpop(stack);
         for (int i = 0; i < 4; i++) {
             vec2i_t nv = {v.x + dx[i], v.y + dy[i]};
-            if (nv.x >= canvas->w || nv.x < 0 || nv.y >= canvas->h || nv.y < 0) {
+            if (nv.x >= canvas->w || nv.x < 0 || nv.y >= canvas->h ||
+                nv.y < 0) {
                 continue;
             }
             if (canvas_get_pixel(canvas, nv.x, nv.y) != oldcolor) {
@@ -306,7 +312,8 @@ void canvas_draw_line(canvas_t *canvas, int x1, int y1, int x2, int y2) {
     while (true) {
         for (int i = -canvas->brushsize; i < canvas->brushsize; i++) {
             for (int j = -canvas->brushsize; j < canvas->brushsize; j++) {
-                if (x1 + i < 0 || x1 + i >= canvas->w || y1 + j < 0 || y1 + j >= canvas->h) {
+                if (x1 + i < 0 || x1 + i >= canvas->w || y1 + j < 0 ||
+                    y1 + j >= canvas->h) {
                     continue;
                 }
                 canvas_set_pixel(canvas, x1 + i, y1 + j);
@@ -329,75 +336,47 @@ void canvas_draw_line(canvas_t *canvas, int x1, int y1, int x2, int y2) {
 
 void canvas_event(canvas_t *canvas, SDL_Event e, gui_t *gui) {
     switch (e.type) {
-        case SDL_MOUSEBUTTONDOWN:
-            if (e.button.x < 0 || e.button.x >= canvas->w || e.button.y < 0 || e.button.y >= canvas->h) {
+    case SDL_MOUSEBUTTONDOWN:
+        if (e.button.x < 0 || e.button.x >= canvas->w || e.button.y < 0 ||
+            e.button.y >= canvas->h) {
+            break;
+        }
+        if (canvas->tool == BRUSH || canvas->tool == LINE) {
+            canvas->isdrag = true;
+            canvas->lx = e.button.x;
+            canvas->ly = e.button.y;
+        }
+        break;
+    case SDL_MOUSEBUTTONUP:
+        canvas->isdrag = false;
+        if (canvas->tool == BUCKET) {
+            canvas_flood_fill(canvas, e.button.x, e.button.y);
+        } else if (canvas->tool == LINE) {
+            canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x,
+                             e.motion.y);
+        } else if (canvas->tool == TEXT) {
+            gui->text.open_dialog = true;
+            gui->text.x = e.button.x;
+            gui->text.y = e.button.y;
+        }
+        break;
+    case SDL_MOUSEMOTION:
+        if (canvas->tool == BRUSH && canvas->isdrag) {
+            int x = e.motion.x;
+            int y = e.motion.y;
+            if (x >= canvas->w || y >= canvas->h)
                 break;
-            }
-            if (canvas->tool == BRUSH || canvas->tool == LINE) {
-                canvas->isdrag = true;
-                canvas->lx = e.button.x;
-                canvas->ly = e.button.y;
-            }
-            break;
-        case SDL_MOUSEBUTTONUP:
-            canvas->isdrag = false;
-            if (canvas->tool == BUCKET) {
-                canvas_flood_fill(canvas, e.button.x, e.button.y);
-            } else if (canvas->tool == LINE) {
-                canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x, e.motion.y);
-            } else if (canvas->tool == TEXT) {
-                gui->text.open_dialog = true;
-                gui->text.x = e.button.x;
-                gui->text.y = e.button.y;
-            }
-            break;
-        case SDL_MOUSEMOTION:
-            if (canvas->tool == BRUSH && canvas->isdrag) {
-                int x = e.motion.x;
-                int y = e.motion.y;
-                if (x >= canvas->w || y >= canvas->h)
-                    break;
-                canvas_draw_line(canvas, canvas->lx, canvas->ly, x, y);
-                canvas->lx = x;
-                canvas->ly = y;
-            } else if (canvas->tool == LINE && canvas->isdrag) {
-                canvas->use_tfb = true;
-                memset(canvas->tfb, 0, canvas->w * canvas->h * sizeof(uint32_t));
-                canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x, e.motion.y);
-                canvas->use_tfb = false;
-            }
-            break;
-        case SDL_KEYDOWN:
-            switch (e.key.keysym.sym) {
-                case SDLK_1:
-                    canvas->fg = colors[0];
-                    break;
-                case SDLK_2:
-                    canvas->fg = colors[1];
-                    break;
-                case SDLK_3:
-                    canvas->fg = colors[2];
-                    break;
-                case SDLK_4:
-                    canvas->fg = colors[3];
-                    break;
-                case SDLK_5:
-                    canvas->fg = colors[4];
-                    break;
-                case SDLK_EQUALS:
-                    canvas->brushsize++;
-                    break;
-                case SDLK_MINUS:
-                    canvas->brushsize--;
-                    break;
-                case SDLK_n:
-                    canvas->tool = BUCKET;
-                    break;
-                case SDLK_b:
-                    canvas->tool = BRUSH;
-                    break;
-            }
-            break;
+            canvas_draw_line(canvas, canvas->lx, canvas->ly, x, y);
+            canvas->lx = x;
+            canvas->ly = y;
+        } else if (canvas->tool == LINE && canvas->isdrag) {
+            canvas->use_tfb = true;
+            memset(canvas->tfb, 0, canvas->w * canvas->h * sizeof(uint32_t));
+            canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x,
+                             e.motion.y);
+            canvas->use_tfb = false;
+        }
+        break;
     }
 }
 
@@ -418,23 +397,28 @@ void app_event(app_t *app) {
     nk_input_end(app->gui.ctx);
 }
 
-#define ARGB_TO_NKCOLORF(argb) { \
-    ((float)((argb >> 16) & 0xff) / 255.0f), \
-    ((float)((argb >> 8) & 0xff) / 255.0f), \
-    ((float)((argb >> 0) & 0xff) / 255.0f), \
-    ((float)((argb >> 24) & 0xff) / 255.0f) \
-}
+/* TODO use more robust way (maybe nk's function)
+to prevent little-endian, big-endian problem
+*/
+#define ARGB_TO_NKCOLORF(argb)                                                 \
+    {                                                                          \
+        ((float)((argb >> 16) & 0xff) / 255.0f),                               \
+            ((float)((argb >> 8) & 0xff) / 255.0f),                            \
+            ((float)((argb >> 0) & 0xff) / 255.0f),                            \
+            ((float)((argb >> 24) & 0xff) / 255.0f)                            \
+    }
 
-#define NKCOLORF_TO_ARGB(colorf) \
-    ((uint32_t)(colorf.r * 255.0f) << 16) | \
-    ((uint32_t)(colorf.g * 255.0f) << 8) | \
-    ((uint32_t)(colorf.b * 255.0f) << 0) | \
-    ((uint32_t)(colorf.a * 255.0f) << 24) \
+#define NKCOLORF_TO_ARGB(colorf)                                               \
+    ((uint32_t)(colorf.r * 255.0f) << 16) |                                    \
+        ((uint32_t)(colorf.g * 255.0f) << 8) |                                 \
+        ((uint32_t)(colorf.b * 255.0f) << 0) |                                 \
+        ((uint32_t)(colorf.a * 255.0f) << 24)
 
 void app_draw_gui(app_t *app) {
     gui_t gui = app->gui;
 
-    if (nk_begin(gui.ctx, "Settings", nk_rect(0, app->h, app->w, GUI_HEIGHT), NK_WINDOW_MOVABLE)) {
+    if (nk_begin(gui.ctx, "Settings", nk_rect(0, app->h, app->w, GUI_HEIGHT),
+                 NK_WINDOW_MOVABLE)) {
         nk_layout_row_dynamic(gui.ctx, GUI_HEIGHT, 4);
 
         if (nk_group_begin(gui.ctx, "col0", NK_WINDOW_BORDER)) {
@@ -452,7 +436,7 @@ void app_draw_gui(app_t *app) {
             }
             nk_group_end(gui.ctx);
         }
-        
+
         if (nk_group_begin(gui.ctx, "col1", NK_WINDOW_BORDER)) {
             nk_layout_row_dynamic(gui.ctx, 20, 1);
             nk_label(gui.ctx, "Tool size", NK_TEXT_LEFT);
@@ -471,21 +455,29 @@ void app_draw_gui(app_t *app) {
 
         if (nk_group_begin(gui.ctx, "col3", NK_WINDOW_BORDER)) {
             nk_layout_row_dynamic(gui.ctx, 30, 2);
-            if (nk_option_label(gui.ctx, "Brush", app->canvas.tool == BRUSH)) app->canvas.tool = BRUSH;
-            if (nk_option_label(gui.ctx, "Bucket", app->canvas.tool == BUCKET)) app->canvas.tool = BUCKET;
-            if (nk_option_label(gui.ctx, "Line", app->canvas.tool == LINE)) app->canvas.tool = LINE;
-            if (nk_option_label(gui.ctx, "Text", app->canvas.tool == TEXT)) app->canvas.tool = TEXT;
+            if (nk_option_label(gui.ctx, "Brush", app->canvas.tool == BRUSH))
+                app->canvas.tool = BRUSH;
+            if (nk_option_label(gui.ctx, "Bucket", app->canvas.tool == BUCKET))
+                app->canvas.tool = BUCKET;
+            if (nk_option_label(gui.ctx, "Line", app->canvas.tool == LINE))
+                app->canvas.tool = LINE;
+            if (nk_option_label(gui.ctx, "Text", app->canvas.tool == TEXT))
+                app->canvas.tool = TEXT;
             nk_group_end(gui.ctx);
         }
     }
     nk_end(gui.ctx);
 
     if (gui.save.open_dialog) {
-        if (nk_begin(gui.ctx, "Save", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
+        if (nk_begin(gui.ctx, "Save", nk_rect(50, 50, 200, 200),
+                     NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
             nk_layout_row_dynamic(gui.ctx, 30, 1);
-            if (nk_button_label(gui.ctx, gui.save.file_path ? gui.save.file_path : "Select file path" )) {
-                gui.save.file_path = tinyfd_saveFileDialog("Select where to save",
-                        "image.jpg", 2, (const char*[]){"*.jpg", "*.jpeg"}, "jpg image");
+            if (nk_button_label(gui.ctx, gui.save.file_path
+                                             ? gui.save.file_path
+                                             : "Select file path")) {
+                gui.save.file_path = tinyfd_saveFileDialog(
+                    "Select where to save", "image.jpg", 2,
+                    (const char *[]){"*.jpg", "*.jpeg"}, "jpg image");
             }
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             nk_label(gui.ctx, "Quality", NK_TEXT_LEFT);
@@ -493,30 +485,29 @@ void app_draw_gui(app_t *app) {
             nk_layout_row_dynamic(gui.ctx, 30, 1);
             if (gui.save.file_path != NULL) {
                 if (nk_button_label(gui.ctx, "Save")) {
-                    canvas_save(&app->canvas, gui.save.file_path, gui.save.quality);
+                    canvas_save(&app->canvas, gui.save.file_path,
+                                gui.save.quality);
                     gui.save.open_dialog = false;
                     gui.save.file_path = NULL;
                 }
             }
-        }
-        else {
+        } else {
             gui.save.open_dialog = false;
         }
         nk_end(gui.ctx);
     }
 
     if (gui.new.open_dialog) {
-        if (nk_begin(gui.ctx, "New Canvas", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
+        if (nk_begin(gui.ctx, "New Canvas", nk_rect(50, 50, 200, 200),
+                     NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             nk_label(gui.ctx, "Width", NK_TEXT_LEFT);
-            nk_edit_string_zero_terminated(
-                gui.ctx, NK_EDIT_BOX, gui.new.wb, sizeof(gui.new.wb), nk_filter_ascii
-            );
+            nk_edit_string_zero_terminated(gui.ctx, NK_EDIT_BOX, gui.new.wb,
+                                           sizeof(gui.new.wb), nk_filter_ascii);
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             nk_label(gui.ctx, "Height", NK_TEXT_LEFT);
-            nk_edit_string_zero_terminated(
-                gui.ctx, NK_EDIT_BOX, gui.new.hb, sizeof(gui.new.hb), nk_filter_ascii
-            );
+            nk_edit_string_zero_terminated(gui.ctx, NK_EDIT_BOX, gui.new.hb,
+                                           sizeof(gui.new.hb), nk_filter_ascii);
             if (nk_button_label(gui.ctx, "New")) {
                 gui.new.w = 400;
                 gui.new.h = 0;
@@ -526,65 +517,75 @@ void app_draw_gui(app_t *app) {
                 app_init(app, gui.new.w, gui.new.h);
                 return;
             }
-        }
-        else {
+        } else {
             gui.new.open_dialog = false;
         }
         nk_end(gui.ctx);
     }
 
     if (gui.load.open_dialog) {
-        if (nk_begin(gui.ctx, "Load Image", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
+        if (nk_begin(gui.ctx, "Load Image", nk_rect(50, 50, 200, 200),
+                     NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
             nk_layout_row_dynamic(gui.ctx, 30, 1);
-            if (nk_button_label(gui.ctx, gui.load.file_path ? gui.load.file_path : "Select file path" )) {
-                gui.load.file_path = tinyfd_openFileDialog("Which file to load from", "", 2, (const char*[]){"*.jpg", "*.jpeg"}, "JPG Image files", false);
+            if (nk_button_label(gui.ctx, gui.load.file_path
+                                             ? gui.load.file_path
+                                             : "Select file path")) {
+                gui.load.file_path =
+                    tinyfd_openFileDialog("Which file to load from", "", 2,
+                                          (const char *[]){"*.jpg", "*.jpeg"},
+                                          "JPG Image files", false);
                 if (gui.load.file_path == NULL) {
                     gui.load.open_dialog = false;
                     warn("Failed getting file path");
                 }
             }
             if (nk_button_label(gui.ctx, "Load")) {
-                unsigned char *data = stbi_load(gui.load.file_path, &gui.load.w, &gui.load.h, &gui.load.channel, 4);
+                uint8_t *data = stbi_load(gui.load.file_path, &gui.load.w,
+                                          &gui.load.h, &gui.load.channel, 4);
                 if (data == NULL) {
                     gui.load.open_dialog = false;
                     warn("Failed opening image file %s", stbi_failure_reason());
                 } else {
                     uint32_t *in_argb = malloc(gui.load.w * gui.load.h * 4);
                     for (int i = 0; i < gui.load.w * gui.load.h; i++) {
-                        in_argb[i] = (data[i * 4 + 3] << 24) | (data[i * 4 + 0] << 16) | (data[i * 4 + 1] << 8) | (data[i * 4 + 2] << 0);
+                        in_argb[i] =
+                            (data[i * 4 + 3] << 24) | (data[i * 4 + 0] << 16) |
+                            (data[i * 4 + 1] << 8) | (data[i * 4 + 2] << 0);
                     }
                     app_clean(app);
                     app_init(app, gui.load.w, gui.load.h);
-                    memcpy(app->canvas.fb, in_argb, gui.load.w * gui.load.h * 4);
+                    memcpy(app->canvas.fb, in_argb,
+                           gui.load.w * gui.load.h * 4);
                     free(in_argb);
                     free(data);
                     return;
                 }
             }
-        }
-        else {
+        } else {
             gui.load.open_dialog = false;
         }
         nk_end(gui.ctx);
     }
 
     if (gui.text.open_dialog) {
-        if (nk_begin(gui.ctx, "Draw Text", nk_rect(50, 50, 200, 200), NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
+        if (nk_begin(gui.ctx, "Draw Text", nk_rect(50, 50, 200, 200),
+                     NK_WINDOW_MOVABLE | NK_WINDOW_CLOSABLE)) {
             nk_layout_row_dynamic(gui.ctx, 30, 1);
-            nk_combobox(gui.ctx, (const char**)app->font_name_arr, arrlen(app->font_name_arr), &gui.text.selidx,
-                    30, nk_vec2(350, 400));
+            nk_combobox(gui.ctx, (const char **)app->font_name_arr,
+                        arrlen(app->font_name_arr), &gui.text.selidx, 30,
+                        nk_vec2(350, 400));
 
             nk_layout_row_dynamic(gui.ctx, 30, 1);
-            nk_edit_string_zero_terminated(
-                gui.ctx, NK_EDIT_BOX, gui.text.buf, sizeof(gui.text.buf), 0
-            );
+            nk_edit_string_zero_terminated(gui.ctx, NK_EDIT_BOX, gui.text.buf,
+                                           sizeof(gui.text.buf), 0);
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             nk_label(gui.ctx, "Size", NK_TEXT_LEFT);
             nk_slider_int(gui.ctx, 1, &gui.text.size, 72, 1);
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             if (nk_button_label(gui.ctx, "Draw")) {
-                canvas_draw_text(&app->canvas, gui.text.x, gui.text.y, gui.text.buf,
-                        app->font_arr[gui.text.selidx].path, gui.text.size);
+                canvas_draw_text(
+                    &app->canvas, gui.text.x, gui.text.y, gui.text.buf,
+                    app->font_arr[gui.text.selidx].path, gui.text.size);
                 gui.text.open_dialog = false;
                 gui.text.buf[0] = 0;
             }
@@ -601,17 +602,21 @@ void app_draw_gui(app_t *app) {
 void app_draw_canvas(app_t *app) {
     SDL_SetRenderDrawColor(app->rend, 0, 0, 0, 255);
     SDL_RenderClear(app->rend);
-    SDL_UpdateTexture(app->tex, NULL, app->canvas.fb, app->canvas.w * sizeof(*app->canvas.fb));
+    SDL_UpdateTexture(app->tex, NULL, app->canvas.fb,
+                      app->canvas.w * sizeof(*app->canvas.fb));
     const SDL_Rect dstrect = {
         .w = app->canvas.w,
         .h = app->canvas.h,
     };
     SDL_RenderCopy(app->rend, app->tex, NULL, &dstrect);
-    SDL_UpdateTexture(app->tex, NULL, app->canvas.tfb, app->canvas.w * sizeof(*app->canvas.tfb));
+    SDL_UpdateTexture(app->tex, NULL, app->canvas.tfb,
+                      app->canvas.w * sizeof(*app->canvas.tfb));
     SDL_RenderCopy(app->rend, app->tex, NULL, &dstrect);
 }
 
 void app_run(app_t *app) {
+    /* TODO better frame capping (time ms used for each frame)
+    and subtract it from 16.6666 */
     while (app->running) {
         app_event(app);
         app_draw_canvas(app);
@@ -625,6 +630,7 @@ int main(int argc, char **argv) {
     int w = 800;
     int h = 600;
 
+    /* TODO - better argument parsing and more options */
     if (argc >= 2) {
         if (sscanf(argv[1], "%dx%d", &w, &h) != 2) {
             w = 800;
@@ -644,6 +650,7 @@ int main(int argc, char **argv) {
     app_run(&app);
     app_clean(&app);
 
+    TTF_Quit();
     SDL_Quit();
     return EXIT_SUCCESS;
 }
