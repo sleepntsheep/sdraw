@@ -37,9 +37,9 @@ TARGETDIR = Debug
 TARGET = $(TARGETDIR)/sdraw
 OBJDIR = obj/Debug
 DEFINES += -DDEBUG -D_DEFAULT_SOURCE
-ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -g -std=c2x -Wall -Wextra -pedantic -ggdb
-ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -g -std=c2x -Wall -Wextra -pedantic -ggdb
-LIBS += -lSDL2 -lSDL2_ttf -lSDL2_image -lm -lfontconfig
+ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -g -std=c99 -Wall -Wextra -pedantic -ggdb
+ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -g -std=c99 -Wall -Wextra -pedantic -ggdb
+LIBS += -lSDL2 -lSDL2_ttf -lm -lfontconfig
 ALL_LDFLAGS += $(LDFLAGS)
 
 else ifeq ($(config),release)
@@ -47,9 +47,9 @@ TARGETDIR = Release
 TARGET = $(TARGETDIR)/sdraw
 OBJDIR = obj/Release
 DEFINES += -DNDEBUG -D_DEFAULT_SOURCE
-ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -O2 -std=c2x -Wall -Wextra -pedantic -ggdb
-ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -O2 -std=c2x -Wall -Wextra -pedantic -ggdb
-LIBS += -lSDL2 -lSDL2_ttf -lSDL2_image -lm -lfontconfig
+ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -O2 -std=c99 -Wall -Wextra -pedantic -ggdb
+ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -O2 -std=c99 -Wall -Wextra -pedantic -ggdb
+LIBS += -lSDL2 -lSDL2_ttf -lm -lfontconfig
 ALL_LDFLAGS += $(LDFLAGS) -s
 
 else ifeq ($(config),mingw)
@@ -57,9 +57,9 @@ TARGETDIR = Mingw
 TARGET = $(TARGETDIR)/sdraw.exe
 OBJDIR = obj/Mingw
 DEFINES += -DNDEBUG -Dmain=SDL_main -D_DEFAULT_SOURCE
-ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -O2 -std=c2x -Wall -Wextra -pedantic -ggdb
-ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -O2 -std=c2x -Wall -Wextra -pedantic -ggdb
-LIBS += -lmingw32 -lSDL2main -lcomdlg32 -lole32 -lSDL2 -lSDL2_ttf -lSDL2_image -lm -lfontconfig
+ALL_CFLAGS += $(CFLAGS) $(ALL_CPPFLAGS) -O2 -std=c99 -Wall -Wextra -pedantic -ggdb
+ALL_CXXFLAGS += $(CXXFLAGS) $(ALL_CPPFLAGS) -O2 -std=c99 -Wall -Wextra -pedantic -ggdb
+LIBS += -lmingw32 -lSDL2main -lcomdlg32 -lole32 -lSDL2 -lSDL2_ttf -lm -lfontconfig
 ALL_LDFLAGS += $(LDFLAGS) -mwindows -s
 
 endif

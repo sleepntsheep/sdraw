@@ -373,7 +373,7 @@ void canvas_event(canvas_t *canvas, SDL_Event e, gui_t *gui) {
                     canvas_draw_line(canvas, e.motion.x, canvas->ly, e.motion.x, e.motion.y);
                     canvas_draw_line(canvas, canvas->lx, e.motion.y, e.motion.x, e.motion.y);
                     break;
-                case RECTFILL:
+                case RECTFILL: {
                     int sx = MIN(canvas->lx, e.motion.x);
                     int ex = MAX(canvas->lx, e.motion.x);
                     int sy = MIN(canvas->ly, e.motion.y);
@@ -382,12 +382,13 @@ void canvas_event(canvas_t *canvas, SDL_Event e, gui_t *gui) {
                         for (int j = sy; j <= ey; j++)
                             canvas_set_pixel(canvas, i, j);
                     break;
+                               }
             }
             break;
         case SDL_MOUSEMOTION:
             if (!canvas->isdrag) break;
             switch (canvas->tool) {
-                case BRUSH:
+                case BRUSH: {
                     int x = e.motion.x;
                     int y = e.motion.y;
                     if (x >= canvas->w || y >= canvas->h)
@@ -396,6 +397,7 @@ void canvas_event(canvas_t *canvas, SDL_Event e, gui_t *gui) {
                     canvas->lx = x;
                     canvas->ly = y;
                     break;
+                            }
                 case LINE:
                     canvas->use_tfb = true;
                     memset(canvas->tfb, 0, canvas->w * canvas->h * sizeof(argb));
