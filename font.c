@@ -8,47 +8,8 @@
 #include "dynarray.h"
 #include "font.h"
 
-//static font **add_fonts_from_dir(const char *dirname, sdraw_font_t **fonts) {
-//    /* TODO - make this function add all subfolder fonts recursively (or not recursive?)*/
-//    size_t dirnamelen = strlen(dirname);
-//    DIR *dir = opendir(dirname);
-//    if (dir != NULL) {
-//        struct dirent *ent;
-//        while ((ent = readdir(dir)) != NULL) {
-//            if (ent->d_type == DT_REG) {
-//                sdraw_font_t font;
-//                // check if ent is font
-//                if (strstr(ent->d_name, ".ttf") != NULL || strstr(ent->d_name, ".otf") != NULL) {
-//                    size_t namelen = strlen(ent->d_name);
-//                    // add font to fonts
-//                    char *path = malloc(dirnamelen + namelen + 2);
-//                    memcpy(path, dirname, dirnamelen);
-//                    path[dirnamelen] = '/';
-//                    memcpy(path + dirnamelen + 1, ent->d_name, namelen);
-//                    font[dirnamelen + namelen + 1] = '\0';
-//                    arrpush(fonts, path);
-//                    info("Added font %s", path);
-//                }
-//                font.path = path;
-//            }
-//        }
-//        closedir(dir);
-//    } else {
-//        //warnerr("Could not open font directory %s", dirname);
-//    }
-//    return fonts;
-//}
-
 sdraw_font_t *get_all_fonts() {
     sdraw_font_t *fonts = NULL;
-
-    /*
-    FcStrList *dirs = FcConfigGetFontDirs((void*)0);
-    FcChar8 *dirname;
-    while ((dirname = FcStrListNext(dirs))) {
-        fonts = add_fonts_from_dir((char*)dirname, fonts);
-    }
-    */
 
     FcPattern *pat;
     FcFontSet *fs;

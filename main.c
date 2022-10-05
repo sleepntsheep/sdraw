@@ -1,7 +1,7 @@
 /*  sdraw - simple paint program
  *
  *  TODO
- *   - rectangle tool
+ *   done - rectangle tool
  *   - select & mvoe tool
  *   - lasso select tool
  *   - undo & redo
@@ -209,6 +209,7 @@ void app_init(app_t *app, int w, int h) {
 void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text,
         const char *font_path, int font_size) {
     /* TODO: make it less hacky (stbtt would be great); */
+    /* TODOOOOOOOOOO: let user move text around, before deciding on final position */
     TTF_Font *font;
     SDL_Surface *surf;
     font = TTF_OpenFont(font_path, font_size);
@@ -241,7 +242,7 @@ void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text,
                                  sizeof(pixel));
             if (pixel == 0)
                 continue;
-            canvas->fg = pixel;
+            canvas->fg = (canvas->fg & 0x00FFFFFF) | (pixel & 0xFF000000);
             canvas_set_pixel(canvas, x + i, y + j);
         }
     }
@@ -584,6 +585,9 @@ void app_draw_gui(app_t *app) {
             if (nk_button_label(gui.ctx, "Load")) {
                 uint8_t *data = stbi_load(gui.load.file_path, &gui.load.w,
                                           &gui.load.h, &gui.load.channel, 4);
+                /* TODOOOOOOO: have image loading as some sort of a widget, 
+                 * maybe similar to text?? then allow user to adjust the size,
+                 * move it while it is not placed on the fb */
                 if (data == NULL) {
                     gui.load.open_dialog = false;
                     warn("Failed opening image file %s", stbi_failure_reason());
