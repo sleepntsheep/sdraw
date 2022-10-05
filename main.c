@@ -49,11 +49,16 @@
 #include "nuklear.h"
 #include "nuklear_sdl_renderer.h"
 
+//#define STB_TRUETYPE_IMPLEMENTATION
+//#include "stb_truetype.h"
+
 #define UNUSED(a) ((void)(a))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-const int GUI_HEIGHT = 100;
+typedef uint32_t argb;
+
+const int GUI_HEIGHT = 150;
 const int MAX_BRUSHSIZE = 30;
 
 enum Tool {
@@ -61,12 +66,15 @@ enum Tool {
     BUCKET,
     LINE,
     TEXT,
+    RECT,
+    RECTFILL,
+    TOOL_COUNT,
 };
 
 typedef struct {
-    uint32_t *fb;
-    uint32_t *tfb;
-    uint32_t fg;
+    argb *fb;
+    argb *tfb;
+    argb fg;
     int w, h;
     int tool;
     int brushsize;
@@ -103,11 +111,6 @@ typedef struct {
     } text;
 } gui_t;
 
-enum Focus {
-    FOCUS_CANVAS,
-    FOCUS_GUI,
-};
-
 typedef struct {
     canvas_t canvas;
     SDL_Window *win;
@@ -118,6 +121,10 @@ typedef struct {
     gui_t gui;
     sdraw_font_t *font_arr;
     const char **font_name_arr;
+    struct {
+        argb *data;
+        int x, y;
+    } select;
 } app_t;
 
 typedef struct {
@@ -145,19 +152,17 @@ void canvas_init(canvas_t *canvas, int w, int h) {
 void canvas_set_pixel(canvas_t *canvas, int x, int y) {
     if (x < 0 || y < 0 || x >= canvas->w || y >= canvas->h)
         return;
-    if (canvas->use_tfb) {
+    if (canvas->use_tfb)
         canvas->tfb[y * canvas->w + x] = canvas->fg;
-    } else {
+    else
         canvas->fb[y * canvas->w + x] = canvas->fg;
-    }
 }
 
-uint32_t canvas_get_pixel(canvas_t *canvas, int x, int y) {
-    if (canvas->use_tfb) {
+argb canvas_get_pixel(canvas_t *canvas, int x, int y) {
+    if (canvas->use_tfb)
         return canvas->tfb[y * canvas->w + x];
-    } else {
+    else
         return canvas->fb[y * canvas->w + x];
-    }
 }
 
 void app_init(app_t *app, int w, int h) {
@@ -198,8 +203,9 @@ void app_init(app_t *app, int w, int h) {
     }
 }
 
+
 void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text,
-                      const char *font_path, int font_size) {
+        const char *font_path, int font_size) {
     /* TODO: make it less hacky (stbtt would be great); */
     TTF_Font *font;
     SDL_Surface *surf;
@@ -224,20 +230,20 @@ void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text,
         warn("Failed to create software renderer");
         return;
     }
+    argb tfg = canvas->fg;
     for (int i = 0; i < surf->w; i++) {
         for (int j = 0; j < surf->h; j++) {
-            uint32_t pixel;
+            argb pixel;
             SDL_RenderReadPixels(rend, &(SDL_Rect){i, j, 1, 1},
                                  SDL_PIXELFORMAT_ARGB8888, &pixel,
                                  sizeof(pixel));
-            if (pixel != 0) {
-                /* alpha is not zero (cuz r,g,b is zero) */
-                canvas_set_pixel(canvas, x + i, y + j);
-                canvas->fg = (pixel & 0xFFFFFF00) | (canvas->fg & 0xFF);
-                canvas_set_pixel(canvas, x + i, y + j);
-            }
+            if (pixel == 0)
+                continue;
+            canvas->fg = pixel;
+            canvas_set_pixel(canvas, x + i, y + j);
         }
     }
+    canvas->fg = tfg;
 
     SDL_UnlockSurface(surf);
     SDL_DestroyTexture(tex);
@@ -252,9 +258,8 @@ void app_clean(app_t *app) {
     SDL_DestroyWindow(app->win);
     free(app->canvas.fb);
     free(app->canvas.tfb);
-    for (int i = 0; i < arrlen(app->font_arr); i++) {
+    for (int i = 0; i < arrlen(app->font_arr); i++)
         free(app->font_arr[i].name);
-    }
     arrfree(app->font_arr);
     arrfree(app->font_name_arr);
 }
@@ -271,12 +276,11 @@ void canvas_save(canvas_t *canvas, const char *file_name, int quality) {
 }
 
 void canvas_flood_fill(canvas_t *canvas, int x, int y) {
-    if (y >= canvas->h || y < 0 || x >= canvas->w || x < 0) {
+    if (y >= canvas->h || y < 0 || x >= canvas->w || x < 0)
         return;
-    }
     static const int dx[] = {-1, 1, 0, 0};
     static const int dy[] = {0, 0, 1, -1};
-    const uint32_t oldcolor = canvas_get_pixel(canvas, x, y);
+    const argb oldcolor = canvas_get_pixel(canvas, x, y);
     if (oldcolor == canvas->fg) {
         return;
     }
@@ -288,12 +292,10 @@ void canvas_flood_fill(canvas_t *canvas, int x, int y) {
         for (int i = 0; i < 4; i++) {
             vec2i_t nv = {v.x + dx[i], v.y + dy[i]};
             if (nv.x >= canvas->w || nv.x < 0 || nv.y >= canvas->h ||
-                nv.y < 0) {
+                nv.y < 0)
                 continue;
-            }
-            if (canvas_get_pixel(canvas, nv.x, nv.y) != oldcolor) {
+            if (canvas_get_pixel(canvas, nv.x, nv.y) != oldcolor)
                 continue;
-            }
             canvas_set_pixel(canvas, v.x, v.y);
             arrpush(stack, nv);
         }
@@ -313,15 +315,13 @@ void canvas_draw_line(canvas_t *canvas, int x1, int y1, int x2, int y2) {
         for (int i = -canvas->brushsize; i < canvas->brushsize; i++) {
             for (int j = -canvas->brushsize; j < canvas->brushsize; j++) {
                 if (x1 + i < 0 || x1 + i >= canvas->w || y1 + j < 0 ||
-                    y1 + j >= canvas->h) {
+                    y1 + j >= canvas->h)
                     continue;
-                }
                 canvas_set_pixel(canvas, x1 + i, y1 + j);
             }
         }
-        if (x1 == x2 && y1 == y2) {
+        if (x1 == x2 && y1 == y2)
             break;
-        }
         e2 = 2 * err;
         if (e2 >= dy) {
             err += dy;
@@ -336,46 +336,84 @@ void canvas_draw_line(canvas_t *canvas, int x1, int y1, int x2, int y2) {
 
 void canvas_event(canvas_t *canvas, SDL_Event e, gui_t *gui) {
     switch (e.type) {
-    case SDL_MOUSEBUTTONDOWN:
-        if (e.button.x < 0 || e.button.x >= canvas->w || e.button.y < 0 ||
-            e.button.y >= canvas->h) {
-            break;
-        }
-        if (canvas->tool == BRUSH || canvas->tool == LINE) {
-            canvas->isdrag = true;
-            canvas->lx = e.button.x;
-            canvas->ly = e.button.y;
-        }
-        break;
-    case SDL_MOUSEBUTTONUP:
-        canvas->isdrag = false;
-        if (canvas->tool == BUCKET) {
-            canvas_flood_fill(canvas, e.button.x, e.button.y);
-        } else if (canvas->tool == LINE) {
-            canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x,
-                             e.motion.y);
-        } else if (canvas->tool == TEXT) {
-            gui->text.open_dialog = true;
-            gui->text.x = e.button.x;
-            gui->text.y = e.button.y;
-        }
-        break;
-    case SDL_MOUSEMOTION:
-        if (canvas->tool == BRUSH && canvas->isdrag) {
-            int x = e.motion.x;
-            int y = e.motion.y;
-            if (x >= canvas->w || y >= canvas->h)
+        case SDL_MOUSEBUTTONDOWN:
+            if (e.button.x < 0 || e.button.x >= canvas->w || e.button.y < 0 ||
+                    e.button.y >= canvas->h)
                 break;
-            canvas_draw_line(canvas, canvas->lx, canvas->ly, x, y);
-            canvas->lx = x;
-            canvas->ly = y;
-        } else if (canvas->tool == LINE && canvas->isdrag) {
-            canvas->use_tfb = true;
-            memset(canvas->tfb, 0, canvas->w * canvas->h * sizeof(uint32_t));
-            canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x,
-                             e.motion.y);
-            canvas->use_tfb = false;
-        }
+            switch (canvas->tool) {
+                case BRUSH: /* FALLTHROUGH */
+                case LINE:
+                case RECT:
+                case RECTFILL:
+                    canvas->isdrag = true;
+                    canvas->lx = e.button.x;
+                    canvas->ly = e.button.y;
+                    break;
+            }
+            break;
+        case SDL_MOUSEBUTTONUP:
+            memset(canvas->tfb, 0, canvas->w * canvas->h * sizeof(argb));
+            canvas->isdrag = false;
+            switch (canvas->tool) {
+                case BUCKET:
+                    canvas_flood_fill(canvas, e.button.x, e.button.y);
+                    break;
+                case LINE:
+                    canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x,
+                            e.motion.y);
+                    break;
+                case TEXT:
+                    gui->text.open_dialog = true;
+                    gui->text.x = e.button.x;
+                    gui->text.y = e.button.y;
+                    break;
+                case RECT:
+                    canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x, canvas->ly);
+                    canvas_draw_line(canvas, canvas->lx, canvas->ly, canvas->lx, e.motion.y);
+                    canvas_draw_line(canvas, e.motion.x, canvas->ly, e.motion.x, e.motion.y);
+                    canvas_draw_line(canvas, canvas->lx, e.motion.y, e.motion.x, e.motion.y);
+                    break;
+                case RECTFILL:
+                    int sx = MIN(canvas->lx, e.motion.x);
+                    int ex = MAX(canvas->lx, e.motion.x);
+                    int sy = MIN(canvas->ly, e.motion.y);
+                    int ey = MAX(canvas->ly, e.motion.y);
+                    for (int i = sx; i <= ex; i++)
+                        for (int j = sy; j <= ey; j++)
+                            canvas_set_pixel(canvas, i, j);
+                    break;
+            }
+            break;
+        case SDL_MOUSEMOTION:
+            if (!canvas->isdrag) break;
+            switch (canvas->tool) {
+                case BRUSH:
+                    int x = e.motion.x;
+                    int y = e.motion.y;
+                    if (x >= canvas->w || y >= canvas->h)
+                        break;
+                    canvas_draw_line(canvas, canvas->lx, canvas->ly, x, y);
+                    canvas->lx = x;
+                    canvas->ly = y;
+                    break;
+                case LINE:
+                    canvas->use_tfb = true;
+                    memset(canvas->tfb, 0, canvas->w * canvas->h * sizeof(argb));
+                    canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x,
+                            e.motion.y);
+                    canvas->use_tfb = false;
+                    break;
+                case RECT: /* FALLTHROUGH */
+                case RECTFILL:
+                    canvas->use_tfb = true;
+                    memset(canvas->tfb, 0, canvas->w * canvas->h * sizeof(argb));
+                    canvas_draw_line(canvas, canvas->lx, canvas->ly, e.motion.x, canvas->ly);
+                    canvas_draw_line(canvas, canvas->lx, canvas->ly, canvas->lx, e.motion.y);
+                    canvas_draw_line(canvas, e.motion.x, canvas->ly, e.motion.x, e.motion.y);
+                    canvas_draw_line(canvas, canvas->lx, e.motion.y, e.motion.x, e.motion.y);
+                    canvas->use_tfb = false;
+                    break;
+            }
         break;
     }
 }
@@ -384,9 +422,8 @@ void app_event(app_t *app) {
     SDL_Event e;
     nk_input_begin(app->gui.ctx);
     while (SDL_PollEvent(&e)) {
-        if (!nk_item_is_any_active(app->gui.ctx)) {
+        if (!nk_item_is_any_active(app->gui.ctx))
             canvas_event(&app->canvas, e, &app->gui);
-        }
         switch (e.type) {
         case SDL_QUIT:
             app->running = false;
@@ -409,10 +446,10 @@ to prevent little-endian, big-endian problem
     }
 
 #define NKCOLORF_TO_ARGB(colorf)                                               \
-    ((uint32_t)(colorf.r * 255.0f) << 16) |                                    \
-        ((uint32_t)(colorf.g * 255.0f) << 8) |                                 \
-        ((uint32_t)(colorf.b * 255.0f) << 0) |                                 \
-        ((uint32_t)(colorf.a * 255.0f) << 24)
+    ((argb)(colorf.r * 255.0f) << 16) |                                    \
+        ((argb)(colorf.g * 255.0f) << 8) |                                 \
+        ((argb)(colorf.b * 255.0f) << 0) |                                 \
+        ((argb)(colorf.a * 255.0f) << 24)
 
 void app_draw_gui(app_t *app) {
     gui_t gui = app->gui;
@@ -423,17 +460,14 @@ void app_draw_gui(app_t *app) {
 
         if (nk_group_begin(gui.ctx, "col0", NK_WINDOW_BORDER)) {
             nk_layout_row_dynamic(gui.ctx, 20, 1);
-            if (nk_button_label(gui.ctx, "New")) {
+            if (nk_button_label(gui.ctx, "New"))
                 gui.new.open_dialog = true;
-            }
             nk_layout_row_dynamic(gui.ctx, 20, 1);
-            if (nk_button_label(gui.ctx, "Save")) {
+            if (nk_button_label(gui.ctx, "Save"))
                 gui.save.open_dialog = true;
-            }
             nk_layout_row_dynamic(gui.ctx, 20, 1);
-            if (nk_button_label(gui.ctx, "Load")) {
+            if (nk_button_label(gui.ctx, "Load"))
                 gui.load.open_dialog = true;
-            }
             nk_group_end(gui.ctx);
         }
 
@@ -463,6 +497,10 @@ void app_draw_gui(app_t *app) {
                 app->canvas.tool = LINE;
             if (nk_option_label(gui.ctx, "Text", app->canvas.tool == TEXT))
                 app->canvas.tool = TEXT;
+            if (nk_option_label(gui.ctx, "Rect(Line)", app->canvas.tool == RECT))
+                app->canvas.tool = RECT;
+            if (nk_option_label(gui.ctx, "Rect(Fill)", app->canvas.tool == RECTFILL))
+                app->canvas.tool = RECTFILL;
             nk_group_end(gui.ctx);
         }
     }
@@ -546,17 +584,17 @@ void app_draw_gui(app_t *app) {
                     gui.load.open_dialog = false;
                     warn("Failed opening image file %s", stbi_failure_reason());
                 } else {
-                    uint32_t *in_argb = malloc(gui.load.w * gui.load.h * 4);
+                    argb *in_rgba = malloc(gui.load.w * gui.load.h * 4);
                     for (int i = 0; i < gui.load.w * gui.load.h; i++) {
-                        in_argb[i] =
+                        in_rgba[i] =
                             (data[i * 4 + 3] << 24) | (data[i * 4 + 0] << 16) |
                             (data[i * 4 + 1] << 8) | (data[i * 4 + 2] << 0);
                     }
                     app_clean(app);
                     app_init(app, gui.load.w, gui.load.h);
-                    memcpy(app->canvas.fb, in_argb,
+                    memcpy(app->canvas.fb, in_rgba,
                            gui.load.w * gui.load.h * 4);
-                    free(in_argb);
+                    free(in_rgba);
                     free(data);
                     return;
                 }
@@ -638,12 +676,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) < 0)
         warn("SDL_Init Failed %s", SDL_GetError());
-    }
-    if (TTF_Init() < 0) {
+    if (TTF_Init() < 0)
         warn("TTF_Init Failed %s", TTF_GetError());
-    }
 
     app_t app;
     app_init(&app, w, h);
