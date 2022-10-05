@@ -5,7 +5,7 @@
 #include <dirent.h>
 #endif
 #include "log.h"
-#include "stb_ds.h"
+#include "dynarray.h"
 #include "font.h"
 
 //static font **add_fonts_from_dir(const char *dirname, sdraw_font_t **fonts) {
@@ -88,7 +88,7 @@ sdraw_font_t *get_all_fonts() {
         fnt.name = name;
         /* if we dont strdup this, FcFontSetDestroy will free it */
         fnt.path = strdup((char*)path);
-        arrpush(fonts, fnt);
+        dynarray_push(fonts, fnt);
     }
 
     // cleanup

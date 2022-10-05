@@ -30,8 +30,10 @@
 #include "stb_image_write.h"
 #define SHEEP_LOG_IMPLEMENTATION
 #include "log.h"
-#define STB_DS_IMPLEMENTATION
-#include "stb_ds.h"
+#define SHEEP_DYNARRAY_IMPLEMENTATION
+#include "dynarray.h"
+/*#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"*/
 
 #include "config.h"
 #include "font.h"
@@ -169,10 +171,10 @@ void app_init(app_t *app, int w, int h) {
     /* w, h params are canvas size, app->w and app->h is different */
     memset(app, 0, sizeof(app_t));
     app->font_arr = get_all_fonts();
-    qsort(app->font_arr, stbds_arrlen(app->font_arr), sizeof(sdraw_font_t),
+    qsort(app->font_arr, dynarray_len(app->font_arr), sizeof(sdraw_font_t),
           sdraw_font_cmp);
     app->font_name_arr = NULL;
-    for (int i = 0; i < stbds_arrlen(app->font_arr); i++) {
+    for (size_t i = 0; i < dynarray_len(app->font_arr); i++) {
         arrpush(app->font_name_arr, app->font_arr[i].name);
         assert(app->font_arr[i].name == app->font_name_arr[i]);
     }
@@ -258,7 +260,7 @@ void app_clean(app_t *app) {
     SDL_DestroyWindow(app->win);
     free(app->canvas.fb);
     free(app->canvas.tfb);
-    for (int i = 0; i < arrlen(app->font_arr); i++)
+    for (size_t i = 0; i < dynarray_len(app->font_arr); i++)
         free(app->font_arr[i].name);
     arrfree(app->font_arr);
     arrfree(app->font_name_arr);
