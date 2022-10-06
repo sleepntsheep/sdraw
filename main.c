@@ -34,9 +34,12 @@
 #include "dynarray.h"
 /*#define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"*/
+#define __STD_UTF_16__IMPLEMENTATION
+#include "utf8_utf16.h"
 
 #include "config.h"
 #include "font.h"
+
 
 #define NK_BUTTON_TRIGGER_ON_RELEASE
 #define NK_INCLUDE_FIXED_TYPES
@@ -48,10 +51,12 @@
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_IMPLEMENTATION
 #define NK_SDL_RENDERER_IMPLEMENTATION
+#define STBTT_malloc(x,u)  ((void)(u),malloc(x))
+#define STBTT_free(x,u)    ((void)(u),free(x))
 #include "nuklear.h"
 #include "nuklear_sdl_renderer.h"
 
-//#define STB_TRUETYPE_IMPLEMENTATION
+//#define STB_TRUETYPE_IMPLEMENTATION 
 //#include "stb_truetype.h"
 
 #define UNUSED(a) ((void)(a))
@@ -151,20 +156,34 @@ void canvas_init(canvas_t *canvas, int w, int h) {
     canvas->h = h;
 }
 
-void canvas_set_pixel(canvas_t *canvas, int x, int y) {
-    if (x < 0 || y < 0 || x >= canvas->w || y >= canvas->h)
-        return;
-    if (canvas->use_tfb)
-        canvas->tfb[y * canvas->w + x] = canvas->fg;
-    else
-        canvas->fb[y * canvas->w + x] = canvas->fg;
-}
+#define ALPHA(argb) (argb & 0xFF000000)
+#define RED(argb) (argb & 0x00FF0000)
+#define GREEN(argb) (argb & 0x0000FF00)
+#define BLUE(argb) (argb & 0x000000FF)
 
 argb canvas_get_pixel(canvas_t *canvas, int x, int y) {
     if (canvas->use_tfb)
         return canvas->tfb[y * canvas->w + x];
     else
         return canvas->fb[y * canvas->w + x];
+}
+
+void canvas_set_pixel(canvas_t *canvas, int x, int y) {
+    if (x < 0 || y < 0 || x >= canvas->w || y >= canvas->h)
+        return;
+    uint8_t r, g, b;
+    argb bg = canvas_get_pixel(canvas, x, y);
+    if (ALPHA(canvas->fg) != 255) {
+        // alpha
+        r = RED(canvas->fg) * ALPHA(canvas->fg) + (bg * (255 - ALPHA(canvas->fg)));
+        g = GREEN(canvas->fg) * ALPHA(canvas->fg) + (bg * (255 - ALPHA(canvas->fg)));
+        b = BLUE(canvas->fg) * ALPHA(canvas->fg) + (bg * (255 - ALPHA(canvas->fg)));
+    }
+    argb fg = 0x00 | (r << 4) | (g << 2) | (b);
+    if (canvas->use_tfb)
+        canvas->tfb[y * canvas->w + x] = fg;
+    else
+        canvas->fb[y * canvas->w + x] = fg;
 }
 
 void app_init(app_t *app, int w, int h) {
@@ -208,7 +227,61 @@ void app_init(app_t *app, int w, int h) {
 
 void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text,
         const char *font_path, int font_size) {
-    /* TODO: make it less hacky (stbtt would be great); */
+    
+    /* DONT KNOW HOW TO DRAW UTF-8 IN STB_TRUETYPE, SO FOR NOW IM USING SDL2_TTF */
+    /*
+    FILE* fontFile = fopen(font_path, "rb");
+    fseek(fontFile, 0, SEEK_END);
+    size_t size = ftell(fontFile);
+    fseek(fontFile, 0, SEEK_SET);
+    uint8_t *fontBuffer = malloc(size);
+    fread(fontBuffer, size, 1, fontFile);
+    fclose(fontFile);
+    stbtt_fontinfo info;
+    if (!stbtt_InitFont(&info, fontBuffer, stbtt_GetFontOffsetForIndex(fontBuffer, 0))) {
+        warn("Failed loading font");
+        return;
+    }
+    free(fontBuffer);
+
+    float scale = stbtt_ScaleForPixelHeight(&info, font_size);
+
+    int ascent, descent, lineGap;
+    stbtt_GetFontVMetrics(&info, &ascent, &descent, &lineGap);
+
+    ascent *= scale;
+    descent *= scale;
+
+    size_t utf8_len = strlen(text);
+    nk_uint *wtext = calloc(sizeof *wtext, utf8_len + 1);
+    size_t utf16_len = nk_utf_decode(text, wtext, utf8_len);
+
+    for (size_t i = 0; wtext[i]; i++)
+    {
+        int c_x1, c_y1, c_x2, c_y2;
+        stbtt_GetCodepointBitmapBox(&info, wtext[i], scale, scale, &c_x1, &c_y1, &c_x2, &c_y2);
+
+        int chy = y + ascent + c_y1;
+
+        int width = c_x2 - c_x1, height = c_y2 - c_y1;
+        unsigned char *bitmap = stbtt_GetCodepointBitmap(&info, scale, scale, wtext[i], &width, &height, NULL, NULL);
+
+        int ax = 0, left_side_bearing;
+        stbtt_GetCodepointHMetrics(&info, wtext[i], &ax, &left_side_bearing);
+        x += (ax + left_side_bearing) * scale;
+
+        if (wtext[i+1])
+            x += scale * stbtt_GetCodepointKernAdvance(&info, wtext[i], wtext[i+1]);
+
+        for (int i = 0; i < width; i++)
+            for (int j = 0; j < height; j++)
+                if (bitmap[j*width + i] != 0)
+                    canvas_set_pixel(canvas, i+x, j+chy);
+
+        free(bitmap);
+    }
+    */
+
     /* TODOOOOOOOOOO: let user move text around, before deciding on final position */
     TTF_Font *font;
     SDL_Surface *surf;
@@ -224,6 +297,7 @@ void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text,
     }
     // texture from surf
     SDL_Renderer *rend = SDL_CreateSoftwareRenderer(surf);
+    SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
     SDL_Texture *tex = SDL_CreateTextureFromSurface(rend, surf);
     if (tex == NULL) {
         warn("Failed to create texture from surface");
@@ -626,7 +700,7 @@ void app_draw_gui(app_t *app) {
                                            sizeof(gui.text.buf), 0);
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             nk_label(gui.ctx, "Size", NK_TEXT_LEFT);
-            nk_slider_int(gui.ctx, 1, &gui.text.size, 72, 1);
+            nk_slider_int(gui.ctx, 1, &gui.text.size, 256, 1);
             nk_layout_row_dynamic(gui.ctx, 30, 2);
             if (nk_button_label(gui.ctx, "Draw")) {
                 canvas_draw_text(

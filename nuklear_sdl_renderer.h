@@ -12,7 +12,6 @@
 #define NK_SDL_RENDERER_H_
 
 #include <SDL2/SDL.h>
-
 NK_API struct nk_context*   nk_sdl_init(SDL_Window *win, SDL_Renderer *renderer);
 NK_API void                 nk_sdl_font_stash_begin(struct nk_font_atlas **atlas);
 NK_API void                 nk_sdl_font_stash_end(void);
@@ -41,11 +40,11 @@ NK_API void                 nk_sdl_shutdown(void);
  */
 #ifdef NK_SDL_RENDERER_IMPLEMENTATION
 
-#include <string.h>
+#include <strings.h>
 
 struct nk_sdl_device {
     struct nk_buffer cmds;
-    struct nk_draw_null_texture null;
+    struct nk_draw_null_texture tex_null;
     SDL_Texture *font_tex;
 };
 
@@ -62,6 +61,8 @@ static struct nk_sdl {
     struct nk_context ctx;
     struct nk_font_atlas atlas;
 } sdl;
+
+
 
 NK_INTERN void
 nk_sdl_device_upload_atlas(const void *image, int width, int height)
@@ -112,7 +113,7 @@ nk_sdl_render(enum nk_anti_aliasing AA)
         config.vertex_layout = vertex_layout;
         config.vertex_size = sizeof(struct nk_sdl_vertex);
         config.vertex_alignment = NK_ALIGNOF(struct nk_sdl_vertex);
-        config.null = dev->null;
+        config.tex_null = dev->tex_null;
         config.circle_segment_count = 22;
         config.curve_segment_count = 22;
         config.arc_segment_count = 22;
@@ -258,7 +259,7 @@ nk_sdl_font_stash_end(void)
     const void *image; int w, h;
     image = nk_font_atlas_bake(&sdl.atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
     nk_sdl_device_upload_atlas(image, w, h);
-    nk_font_atlas_end(&sdl.atlas, nk_handle_ptr(sdl.ogl.font_tex), &sdl.ogl.null);
+    nk_font_atlas_end(&sdl.atlas, nk_handle_ptr(sdl.ogl.font_tex), &sdl.ogl.tex_null);
     if (sdl.atlas.default_font)
         nk_style_set_font(&sdl.ctx, &sdl.atlas.default_font->handle);
 }
