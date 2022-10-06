@@ -172,14 +172,16 @@ void canvas_set_pixel(canvas_t *canvas, int x, int y) {
     if (x < 0 || y < 0 || x >= canvas->w || y >= canvas->h)
         return;
     uint8_t r, g, b;
-    argb bg = canvas_get_pixel(canvas, x, y);
+    argb bg = canvas_get_pixel(canvas, x, y), fg;
     if (ALPHA(canvas->fg) != 255) {
         // alpha
         r = RED(canvas->fg) * ALPHA(canvas->fg) + (bg * (255 - ALPHA(canvas->fg)));
         g = GREEN(canvas->fg) * ALPHA(canvas->fg) + (bg * (255 - ALPHA(canvas->fg)));
         b = BLUE(canvas->fg) * ALPHA(canvas->fg) + (bg * (255 - ALPHA(canvas->fg)));
+        fg = 0x0 | (r << 4) | (g << 2) | b;
+    } else {
+        fg = canvas->fg;
     }
-    argb fg = 0x00 | (r << 4) | (g << 2) | (b);
     if (canvas->use_tfb)
         canvas->tfb[y * canvas->w + x] = fg;
     else
@@ -299,6 +301,7 @@ void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text,
     SDL_Renderer *rend = SDL_CreateSoftwareRenderer(surf);
     SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
     SDL_Texture *tex = SDL_CreateTextureFromSurface(rend, surf);
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
     if (tex == NULL) {
         warn("Failed to create texture from surface");
         return;
@@ -307,9 +310,11 @@ void canvas_draw_text(canvas_t *canvas, int x, int y, const char *text,
         warn("Failed to create software renderer");
         return;
     }
+    int w, h;
+    SDL_QueryTexture(tex, NULL, NULL, &w, &h);
     argb tfg = canvas->fg;
-    for (int i = 0; i < surf->w; i++) {
-        for (int j = 0; j < surf->h; j++) {
+    for (int i = 0; i < w; i++) {
+        for (int j = 0; j < h; j++) {
             argb pixel;
             SDL_RenderReadPixels(rend, &(SDL_Rect){i, j, 1, 1},
                                  SDL_PIXELFORMAT_ARGB8888, &pixel,
