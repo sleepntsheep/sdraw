@@ -6,4 +6,5 @@ simple paint app
 - rectangle and line tool
 - image import/export
 
+[demo](https://www.youtube.com/watch?v=nmoqKl8hVA0)
 
