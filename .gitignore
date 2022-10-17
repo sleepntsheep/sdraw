@@ -5,3 +5,13 @@ sdraw
 sdraw.make
 *.jpg
 Makefile
+Mf
+premake5.lua
+autom4te.cache
+configure
+install-sh
+configure~
+aclocal.m4
+compile
+config.log
+config.status

@@ -34,8 +34,6 @@
 #include "dynarray.h"
 /*#define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"*/
-#define __STD_UTF_16__IMPLEMENTATION
-#include "utf8_utf16.h"
 
 #include "config.h"
 #include "font.h"
